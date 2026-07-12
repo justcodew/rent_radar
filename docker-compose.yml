@@ -1,0 +1,55 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: rent_radar
+      POSTGRES_USER: radar
+      POSTGRES_PASSWORD: radar_secret_2026
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U radar"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./backend
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - crawl_data:/app/data
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build: ./frontend
+    ports:
+      - "5174:80"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  crawl_data:

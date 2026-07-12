@@ -1,0 +1,8 @@
+[project]
+name = "rent-radar"
+version = "0.1.0"
+description = "租房雷达 —— 多平台租房信息采集 + 智能评分 + 推荐系统"
+requires-python = ">=3.11"
+
+[tool.uv]
+dev-dependencies = ["pytest>=7.4.0", "pytest-asyncio>=0.21.0"]
