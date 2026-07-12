@@ -53,10 +53,10 @@ rent_radar/
 │   │   ├── services/
 │   │   │   ├── scoring/        # 评分引擎(规则+AI+洞察+选房)
 │   │   │   ├── matching/       # 匹配引擎(匹配度+通勤)
-│   │   │   └── crawler/        # 采集引擎(阶段二接入)
-│   │   └── workers/            # Celery 定时任务
+│   │   │   └── crawler/        # ★采集引擎(xhs/douban/wb + 反检测 + 断点续爬)
+│   │   └── workers/            # Celery(定时采集→入库→评分)
 │   └── requirements.txt
-├── frontend/                   # React SPA(12页面+8组件)
+├── frontend/                   # React SPA(13页面+8组件,含采集控制台)
 └── infrastructure/
     └── postgres/init.sql       # pgvector 初始化
 ```
@@ -64,8 +64,9 @@ rent_radar/
 ## 开发路线
 
 - ✅ **阶段一**:骨架搭建(目录/配置/docker-compose/路由/前端)
-- ⏳ **阶段二**:采集引擎迁移(MediaCrawler xhs/douban/wb → services/crawler/)
-- ⏳ **阶段三**:评分/推荐引擎接入(scoring + matching)
+- ✅ **阶段二**:采集引擎迁移(MediaCrawler xhs/douban/wb → services/crawler/)
+- ✅ **阶段三**:评分/推荐引擎接入(scoring + matching + Celery 定时任务)
+- ✅ **前端**:采集控制台页面 + crawlApi 封装
 
 ## 来源
 

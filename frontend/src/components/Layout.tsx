@@ -6,6 +6,7 @@ import { useUIStore } from "../stores/ui";
 const NAV = [
   { to: "/", label: "首页", end: true },
   { to: "/search", label: "搜索" },
+  { to: "/crawl", label: "采集" },
   { to: "/ai-match", label: "AI 选房" },
   { to: "/community-eval", label: "小区测评" },
   { to: "/recommend", label: "推荐" },

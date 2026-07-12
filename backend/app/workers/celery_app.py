@@ -70,42 +70,116 @@ def _run_async(coro):
 
 @celery_app.task(name="app.workers.celery_app.crawl_douban")
 def crawl_douban():
-    """抓取豆瓣租房小组"""
+    """采集豆瓣租房信息 → 入库 → 触发评分。
+
+    使用 rent_radar 的统一采集入口(runner.py)。
+    """
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-    from app.services.crawler.douban import crawl_all_groups
 
     engine = create_async_engine(settings.DATABASE_URL)
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
     async def _run():
+        from app.services.crawler.runner import run_crawl, get_crawled_listings
+        # 1. 采集(需 Chrome CDP 环境,无环境时返回 pending)
+        crawl_result = await run_crawl(
+            platform="douban",
+            keywords=getattr(settings, "CRAWL_KEYWORDS", "广州租房"),
+            max_count=20,
+        )
+        # 2. 入库
         async with SessionLocal() as db:
-            stats = await crawl_all_groups(db, max_pages=2)
-            # 对新入库的房源触发评分（简化：所有评分都重算一遍，实际应只算新增的）
-            await _trigger_scoring_for_new(db)
-            return stats
+            from sqlalchemy import select
+            from app.models.listing import Listing
+            listings_data = await get_crawled_listings("douban", limit=50)
+            stats = {"fetched": len(listings_data), "ingested": 0, "skipped": 0}
+            for item in listings_data:
+                exists = await db.execute(
+                    select(Listing.id).where(
+                        Listing.source == item.get("source", "douban"),
+                        Listing.source_id == item.get("source_id", ""),
+                    )
+                )
+                if exists.scalar_one_or_none():
+                    stats["skipped"] += 1
+                    continue
+                db.add(Listing(
+                    source=item.get("source", "douban"),
+                    source_id=item["source_id"],
+                    source_url=item.get("source_url"),
+                    poster_id=item.get("poster_id"),
+                    poster_name=item.get("poster_name"),
+                    title=item.get("title"),
+                    content=item.get("content", ""),
+                    price=item.get("price"),
+                    layout=item.get("layout"),
+                    area_name=item.get("area_name"),
+                    size_sqm=item.get("size_sqm"),
+                    contact_info=item.get("contact_info", {}),
+                    raw_data=item.get("raw_data", {}),
+                ))
+                stats["ingested"] += 1
+            await db.commit()
+            if stats["ingested"] > 0:
+                await _trigger_scoring_for_new(db)
+            return {**crawl_result, **stats}
 
     return _run_async(_run())
 
 
 @celery_app.task(name="app.workers.celery_app.crawl_xiaohongshu")
 def crawl_xiaohongshu():
-    """扫描 XHS_RAW_DIR 里 MediaCrawler 落地的 JSON，解析、入库，然后触发评分。
+    """采集小红书租房信息 → 入库 → 触发评分。
 
-    MediaCrawler 作为独立进程跑（CDP + Playwright，xhs 签名 + 登录态它自己搞定），
-    把搜索结果 JSON 写到 data/xhs_raw/。本任务只做 ETL。
+    使用 rent_radar 的统一采集入口(runner.py)。
     """
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-    from app.services.crawler.xiaohongshu import ingest_xhs_dir
 
     engine = create_async_engine(settings.DATABASE_URL)
     SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
     async def _run():
+        from app.services.crawler.runner import run_crawl, get_crawled_listings
+        crawl_result = await run_crawl(
+            platform="xhs",
+            keywords=getattr(settings, "CRAWL_KEYWORDS", "广州租房"),
+            max_count=20,
+        )
         async with SessionLocal() as db:
-            stats = await ingest_xhs_dir(db)
+            from sqlalchemy import select
+            from app.models.listing import Listing
+            listings_data = await get_crawled_listings("xhs", limit=50)
+            stats = {"fetched": len(listings_data), "ingested": 0, "skipped": 0}
+            for item in listings_data:
+                exists = await db.execute(
+                    select(Listing.id).where(
+                        Listing.source == item.get("source", "xiaohongshu"),
+                        Listing.source_id == item.get("source_id", ""),
+                    )
+                )
+                if exists.scalar_one_or_none():
+                    stats["skipped"] += 1
+                    continue
+                db.add(Listing(
+                    source=item.get("source", "xiaohongshu"),
+                    source_id=item["source_id"],
+                    source_url=item.get("source_url"),
+                    poster_id=item.get("poster_id"),
+                    poster_name=item.get("poster_name"),
+                    title=item.get("title"),
+                    content=item.get("content", ""),
+                    price=item.get("price"),
+                    layout=item.get("layout"),
+                    area_name=item.get("area_name"),
+                    size_sqm=item.get("size_sqm"),
+                    contact_info=item.get("contact_info", {}),
+                    raw_data=item.get("raw_data", {}),
+                ))
+                stats["ingested"] += 1
+            await db.commit()
             if stats["ingested"] > 0:
                 await _trigger_scoring_for_new(db)
-            return stats
+            return {**crawl_result, **stats}
 
     return _run_async(_run())
 
