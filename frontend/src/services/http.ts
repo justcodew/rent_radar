@@ -4,7 +4,7 @@ import { useAuthStore } from "../stores/auth";
 
 const http: AxiosInstance = axios.create({
   baseURL: "/api/v1",
-  timeout: 15000,
+  timeout: 300000, // 5 分钟(采集等长操作需要)
 });
 
 // 请求拦截：自动加 token

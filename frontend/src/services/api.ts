@@ -104,6 +104,7 @@ export const crawlApi = {
   platforms: () => http.get<unknown, { platforms: string[] }>("/crawl/platforms"),
   trigger: (params: { platform: string; keywords?: string; max_count?: number }) =>
     http.post<unknown, any>("/crawl/trigger", null, { params }),
+  status: (taskId: string) => http.get<unknown, any>(`/crawl/status/${taskId}`),
   listings: (params: { platform: string; limit?: number; only_with_price?: boolean }) =>
     http.get<unknown, { platform: string; total: number; listings: any[] }>("/crawl/listings", { params }),
   ingest: (params: { platform: string; limit?: number }) =>

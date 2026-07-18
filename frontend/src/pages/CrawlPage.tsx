@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { crawlApi } from "../services/api";
 
 export default function CrawlPage() {
@@ -9,35 +9,59 @@ export default function CrawlPage() {
   const [result, setResult] = useState<any>(null);
   const [listings, setListings] = useState<any[]>([]);
   const [ingestResult, setIngestResult] = useState<any>(null);
+  const [taskStatus, setTaskStatus] = useState<any>(null);
+  const pollRef = useRef<number | null>(null);
 
   const trigger = async () => {
     setLoading(true);
+    setResult(null);
+    setTaskStatus(null);
     try {
-      const res = await crawlApi.trigger({ platform, keywords, max_count: maxCount });
+      const res: any = await crawlApi.trigger({ platform, keywords, max_count: maxCount });
       setResult(res);
+      // 开始轮询任务状态
+      if (res.task_id) {
+        pollStatus(res.task_id);
+      }
     } catch (e: any) {
       setResult({ error: e?.message || "采集失败" });
-    } finally {
       setLoading(false);
     }
   };
 
+  const pollStatus = (taskId: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = window.setInterval(async () => {
+      try {
+        const status: any = await crawlApi.status(taskId);
+        setTaskStatus(status);
+        if (status.status === "success" || status.status === "failed") {
+          if (pollRef.current) clearInterval(pollRef.current);
+          setLoading(false);
+          // 采集成功后自动加载数据
+          if (status.status === "success") {
+            fetchListings();
+          }
+        }
+      } catch {
+        // 忽略轮询错误
+      }
+    }, 3000); // 每 3 秒查一次
+  };
+
   const fetchListings = async () => {
-    setLoading(true);
     try {
-      const res = await crawlApi.listings({ platform, limit: 50, only_with_price: true });
+      const res: any = await crawlApi.listings({ platform, limit: 50, only_with_price: true });
       setListings(res.listings || []);
-    } catch (e) {
+    } catch {
       setListings([]);
-    } finally {
-      setLoading(false);
     }
   };
 
   const ingest = async () => {
     setLoading(true);
     try {
-      const res = await crawlApi.ingest({ platform, limit: 100 });
+      const res: any = await crawlApi.ingest({ platform, limit: 100 });
       setIngestResult(res);
     } catch (e: any) {
       setIngestResult({ error: e?.message || "入库失败" });
@@ -78,9 +102,25 @@ export default function CrawlPage() {
             {loading ? "采集中..." : "开始采集"}
           </button>
         </div>
+
+        {/* 任务状态 */}
         {result && (
-          <div className="bg-gray-50 rounded p-3 text-sm">
-            <pre className="whitespace-pre-wrap">{JSON.stringify(result, null, 2)}</pre>
+          <div className="bg-blue-50 rounded p-3 text-sm space-y-2">
+            <div>📋 {result.message || "采集已启动"}</div>
+            {result.task_id && <div>任务 ID: <code className="bg-white px-1 rounded">{result.task_id}</code></div>}
+            {taskStatus && (
+              <div className="flex items-center gap-2">
+                {taskStatus.status === "running" && (
+                  <span className="text-blue-600 animate-pulse">🔄 采集中... 请在 Chrome 窗口扫码登录</span>
+                )}
+                {taskStatus.status === "success" && (
+                  <span className="text-green-600">✅ 采集完成! {(taskStatus.result as any)?.crawled || 0} 条数据</span>
+                )}
+                {taskStatus.status === "failed" && (
+                  <span className="text-red-600">❌ 采集失败: {(taskStatus as any).error}</span>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -88,7 +128,7 @@ export default function CrawlPage() {
       {/* 已采集数据 */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">已采集数据(有价格)</h2>
+          <h2 className="text-lg font-semibold">已采集数据</h2>
           <div className="flex gap-2">
             <button onClick={fetchListings} disabled={loading}
               className="border rounded px-4 py-1.5 text-sm hover:bg-gray-50">
@@ -115,7 +155,6 @@ export default function CrawlPage() {
                 </div>
                 <div className="text-right">
                   <span className="text-green-600 font-bold">{l.price ? `${l.price}元/月` : "价格未知"}</span>
-                  <span className="text-gray-400 text-sm ml-2">{l.layout || ""}</span>
                 </div>
               </div>
             ))}
