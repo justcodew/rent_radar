@@ -97,6 +97,15 @@ async def list_listings(
         item = ListingOut.model_validate(listing).model_dump(mode="json")
         item["general_score"] = score
         item["risk_tags"] = risk_tags or []
+        # 中介识别(快速版,仅基于昵称+内容关键词)
+        from app.services.scoring.agent_detector import detect_agent
+        agent_result = detect_agent(
+            poster_name=listing.poster_name or "",
+            title=listing.title or "",
+            content=listing.content or "",
+        )
+        item["agent_level"] = agent_result["agent_level"]
+        item["is_agent"] = agent_result["is_agent"]
         item = _rewrite_images(item)
         data.append(item)
 

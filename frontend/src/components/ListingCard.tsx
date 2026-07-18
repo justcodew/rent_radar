@@ -63,6 +63,22 @@ export default function ListingCard({ listing, matchScore }: Props) {
           </div>
         )}
 
+        {/* 中介标记 */}
+        {listing.is_agent && (
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">
+              🏷️ {(listing as any).agent_level || "疑似中介"}
+            </span>
+          </div>
+        )}
+        {!listing.is_agent && (listing as any).agent_level && (listing as any).agent_level !== "个人房东" && (
+          <div className="mt-2">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-gray-500 bg-gray-100">
+              ℹ️ {(listing as any).agent_level}
+            </span>
+          </div>
+        )}
+
         <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
           <span className={`inline-flex items-center gap-1 ${src.color}`}>
             <span>{src.icon}</span>

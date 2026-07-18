@@ -98,6 +98,39 @@ async def trigger_ai_analysis(
     return ok(result)
 
 
+@router.get("/{listing_id}/agent-detection")
+async def get_agent_detection(
+    listing_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """中介识别分析:多维度判断发帖人是否为中介"""
+    from app.services.scoring.agent_detector import detect_agent
+
+    listing = (await db.execute(select(Listing).where(Listing.id == listing_id))).scalar_one_or_none()
+    if not listing:
+        raise NotFoundError("房源不存在")
+
+    # 获取该发帖人的历史数据
+    post_count = 0
+    titles_history: list[str] = []
+    if listing.poster_id:
+        rows = (await db.execute(
+            select(Listing.title).where(Listing.poster_id == listing.poster_id)
+        )).scalars().all()
+        post_count = len(rows)
+        titles_history = [t for t in rows if t]
+
+    result = detect_agent(
+        poster_name=listing.poster_name or "",
+        poster_id=listing.poster_id or "",
+        title=listing.title or "",
+        content=listing.content or "",
+        post_count=post_count,
+        titles_history=titles_history,
+    )
+    return ok(result)
+
+
 @router.post("/{listing_id}/insights")
 async def trigger_insights(
     listing_id: str,
