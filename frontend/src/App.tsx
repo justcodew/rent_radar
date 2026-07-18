@@ -14,6 +14,7 @@ import FavoritesPage from "./pages/FavoritesPage";
 import CommunityEvalPage from "./pages/CommunityEvalPage";
 import NeedMatchPage from "./pages/NeedMatchPage";
 import CrawlPage from "./pages/CrawlPage";
+import CasePage from "./pages/CasePage";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="/listings/:id" element={<ListingDetailPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/crawl" element={<CrawlPage />} />
+        <Route path="/case" element={<CasePage />} />
         <Route path="/community-eval" element={<CommunityEvalPage />} />
         <Route path="/ai-match" element={<NeedMatchPage />} />
 
