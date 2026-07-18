@@ -3,8 +3,8 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from typing import Any
 
-from sqlalchemy import String, Integer, Text, DateTime, ForeignKey, Index, func, Computed
-from sqlalchemy.dialects.postgresql import UUID as PgUUID, JSONB
+from sqlalchemy import JSON, String, Integer, Text, DateTime, ForeignKey, Index, func, Computed
+import uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -13,7 +13,7 @@ from app.database import Base
 class Listing(Base):
     __tablename__ = "listings"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
 
     # 来源
     source: Mapped[str] = mapped_column(String(20), index=True)            # douban / xiaohongshu
@@ -33,11 +33,11 @@ class Listing(Base):
     size_sqm: Mapped[int | None] = mapped_column(Integer, nullable=True)
     floor_info: Mapped[str | None] = mapped_column(String(50), nullable=True)
     orientation: Mapped[str | None] = mapped_column(String(20), nullable=True)
-    contact_info: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    contact_info: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
     # 原始数据
-    raw_data: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    image_urls: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    raw_data: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    image_urls: Mapped[list[str]] = mapped_column(JSON, default=list)
 
     # 状态
     status: Mapped[str] = mapped_column(String(20), default="active", index=True)
@@ -57,9 +57,9 @@ class ListingImage(Base):
     """房源图片表（用于 pHash 去重和图片分析）"""
     __tablename__ = "listing_images"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     listing_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+        String(36), ForeignKey("listings.id", ondelete="CASCADE"), index=True
     )
     url: Mapped[str] = mapped_column(Text)
     phash: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)

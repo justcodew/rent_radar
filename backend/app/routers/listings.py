@@ -14,6 +14,42 @@ from app.models.score import ListingScore, MatchScore
 from app.models.user import User
 from app.schemas.listing import ListingOut
 
+# 平台 → 本地图片目录映射
+_PLATFORM_IMG_DIR = {"xiaohongshu": "xhs", "douban": "douban", "weibo": "weibo"}
+
+
+def _rewrite_images(item: dict) -> dict:
+    """把 image_urls 转为可访问的路径。
+
+    优先策略:
+    1. 如果本地已下载(data/<platform>/images/<source_id>/),返回本地 API 路径
+    2. 否则返回代理路径(后端带 Referer 转发,但如果 URL 过期仍会失败)
+    """
+    import os
+    from pathlib import Path
+
+    urls = item.get("image_urls") or []
+    source = item.get("source", "")
+    source_id = item.get("source_id", "")
+    platform_dir = _PLATFORM_IMG_DIR.get(source, source)
+    local_dir = Path("data") / platform_dir / "images" / source_id
+
+    result = []
+    for url in urls:
+        if not url or not url.startswith(("http://", "https://")):
+            continue
+        # 尝试从 URL 提取文件名
+        filename = url.split("/")[-1].split("?")[0]
+        local_path = local_dir / filename
+        if local_path.exists():
+            # 本地已下载
+            result.append(f"/api/v1/images/{platform_dir}/{source_id}/{filename}")
+        else:
+            # 远程代理
+            result.append(f"/api/v1/images/proxy?url={url}")
+    item["image_urls"] = result
+    return item
+
 router = APIRouter(prefix="/api/v1/listings", tags=["listings"])
 
 
@@ -60,6 +96,7 @@ async def list_listings(
         item = ListingOut.model_validate(listing).model_dump(mode="json")
         item["general_score"] = score
         item["risk_tags"] = risk_tags or []
+        item = _rewrite_images(item)
         data.append(item)
 
     return ok({
@@ -73,7 +110,7 @@ async def list_listings(
 
 @router.get("/{listing_id}")
 async def get_listing(
-    listing_id: UUID,
+    listing_id: str,
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
@@ -90,4 +127,5 @@ async def get_listing(
         item["general_score"] = score.general_score
         item["risk_tags"] = score.risk_tags or []
         item["evidence"] = score.evidence
+    item = _rewrite_images(item)
     return ok(item)

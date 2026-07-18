@@ -7,8 +7,8 @@ from datetime import datetime
 from uuid import UUID, uuid4
 from typing import Any
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID as PgUUID, JSONB
+from sqlalchemy import JSON, String, Integer, DateTime, ForeignKey, func
+import uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -17,9 +17,9 @@ from app.database import Base
 class ListingScore(Base):
     __tablename__ = "listing_scores"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     listing_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), unique=True
+        String(36), ForeignKey("listings.id", ondelete="CASCADE"), unique=True
     )
 
     # 总分
@@ -40,10 +40,10 @@ class ListingScore(Base):
     info_completeness_score: Mapped[int] = mapped_column(Integer, default=0)
 
     # 风险标签 & 评分依据
-    risk_tags: Mapped[list[str]] = mapped_column(JSONB, default=list)
-    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
-    ai_evidence: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    ai_insights: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    risk_tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    ai_evidence: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    ai_insights: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     score_version: Mapped[str] = mapped_column(String(20), default="rule-v1")
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -52,12 +52,12 @@ class ListingScore(Base):
 class MatchScore(Base):
     __tablename__ = "match_scores"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     listing_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), index=True
+        String(36), ForeignKey("listings.id", ondelete="CASCADE"), index=True
     )
     profile_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"), index=True
+        String(36), ForeignKey("profiles.id", ondelete="CASCADE"), index=True
     )
 
     match_score: Mapped[int] = mapped_column(Integer)
@@ -71,7 +71,7 @@ class MatchScore(Base):
     environment_match: Mapped[int] = mapped_column(Integer, default=0)
     keyword_match: Mapped[int] = mapped_column(Integer, default=0)
 
-    evidence: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    evidence: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (

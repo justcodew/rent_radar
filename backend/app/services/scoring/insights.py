@@ -231,15 +231,22 @@ async def generate_insights(
     """生成深度洞察"""
     cache_key = REDIS_INSIGHTS_CACHE_KEY.format(listing_id=listing_id)
 
-    # 1. 缓存
-    if not force:
-        cached = await redis.get(cache_key)
-        if cached:
-            return {**json.loads(cached), "from_cache": True}
+    # 1. 缓存(Redis 不可用时跳过)
+    if redis and not force:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                return {**json.loads(cached), "from_cache": True}
+        except Exception:
+            pass
 
-    # 2. 预算检查
-    if not await check_budget(redis):
-        return {"skipped": True, "reason": "AI 月度/日度预算超出"}
+    # 2. 预算检查(Redis 不可用时跳过)
+    if redis:
+        try:
+            if not await check_budget(redis):
+                return {"skipped": True, "reason": "AI 月度/日度预算超出"}
+        except Exception:
+            pass
 
     # 3. LLM 配置检查
     if not settings.LLM_API_KEY or not settings.LLM_BASE_URL:
@@ -264,12 +271,16 @@ async def generate_insights(
     # 7. 估算成本（深度分析比浅层贵：~¥0.15/次）
     estimated_cost = 0.15
     now = datetime.now(timezone.utc)
-    monthly_key = "ai:cost:monthly:" + now.strftime("%Y%m")
-    daily_key = "ai:cost:daily:" + now.strftime("%Y%m%d")
-    await redis.incrbyfloat(monthly_key, estimated_cost)
-    await redis.incrbyfloat(daily_key, estimated_cost)
-    await redis.expire(monthly_key, 31 * 86400)
-    await redis.expire(daily_key, 86400)
+    if redis:
+        try:
+            monthly_key = "ai:cost:monthly:" + now.strftime("%Y%m")
+            daily_key = "ai:cost:daily:" + now.strftime("%Y%m%d")
+            await redis.incrbyfloat(monthly_key, estimated_cost)
+            await redis.incrbyfloat(daily_key, estimated_cost)
+            await redis.expire(monthly_key, 31 * 86400)
+            await redis.expire(daily_key, 86400)
+        except Exception:
+            pass
 
     insights = {
         "community_profile": result.get("community_profile", "不确定"),
@@ -294,7 +305,11 @@ async def generate_insights(
         score_row.ai_insights = insights
         await db.commit()
 
-    # 9. 缓存 30 天
-    await redis.set(cache_key, json.dumps(insights, ensure_ascii=False), ex=INSIGHTS_CACHE_TTL)
+    # 9. 缓存 30 天(Redis 不可用时跳过)
+    if redis:
+        try:
+            await redis.set(cache_key, json.dumps(insights, ensure_ascii=False), ex=INSIGHTS_CACHE_TTL)
+        except Exception:
+            pass
 
     return insights

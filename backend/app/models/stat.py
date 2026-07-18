@@ -6,7 +6,7 @@ from datetime import datetime
 from uuid import uuid4, UUID
 
 from sqlalchemy import String, Integer, DateTime, func
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+import uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -15,7 +15,7 @@ from app.database import Base
 class AreaPriceStat(Base):
     __tablename__ = "area_price_stats"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     city: Mapped[str] = mapped_column(String(50), index=True)
     area_name: Mapped[str] = mapped_column(String(100), index=True)
     layout: Mapped[str] = mapped_column(String(50))          # 户型

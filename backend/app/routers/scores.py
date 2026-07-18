@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/v1/scores", tags=["scores"])
 
 
 @router.get("/{listing_id}")
-async def get_score(listing_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_score(listing_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(ListingScore).where(ListingScore.listing_id == listing_id)
     )
@@ -55,7 +55,7 @@ async def get_score(listing_id: UUID, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{listing_id}/recalculate")
 async def recalculate_score(
-    listing_id: UUID,
+    listing_id: str,
     db: AsyncSession = Depends(get_db),
 ):
     """手动触发重新评分（开发/调试用）"""
@@ -88,7 +88,7 @@ async def recalculate_score(
 
 @router.post("/{listing_id}/ai-analysis")
 async def trigger_ai_analysis(
-    listing_id: UUID,
+    listing_id: str,
     force: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
@@ -100,7 +100,7 @@ async def trigger_ai_analysis(
 
 @router.post("/{listing_id}/insights")
 async def trigger_insights(
-    listing_id: UUID,
+    listing_id: str,
     force: bool = False,
     db: AsyncSession = Depends(get_db),
 ):
@@ -109,6 +109,10 @@ async def trigger_insights(
     返回结构化洞察：小区画像、5 优 5 缺、价位评价、3 条建议、推荐结论。
     结果会缓存 30 天，并持久化到 listing_scores.ai_insights。
     """
-    redis = await get_redis()
+    # Redis 不可用时跳过缓存,直接调 LLM
+    try:
+        redis = await get_redis()
+    except Exception:
+        redis = None
     result = await generate_insights(db, redis, listing_id, force=force)
     return ok(result)

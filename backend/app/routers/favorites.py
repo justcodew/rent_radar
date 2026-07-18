@@ -20,18 +20,18 @@ router = APIRouter(prefix="/api/v1", tags=["favorites"])
 
 
 class FavCreate(BaseModel):
-    listing_id: UUID
+    listing_id: str
     category: str = "待看"
     note: str | None = None
 
 
 class IgnoreCreate(BaseModel):
-    listing_id: UUID
+    listing_id: str
     reason: str | None = None
 
 
 class MarkCreate(BaseModel):
-    listing_id: UUID
+    listing_id: str
     mark_type: str   # agent / fake / noisy / quiet / lighting_good / lighting_bad / report
     note: str | None = None
 
@@ -82,7 +82,7 @@ async def list_favorites(
 
 @router.delete("/favorites/{listing_id}")
 async def remove_favorite(
-    listing_id: UUID,
+    listing_id: str,
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):

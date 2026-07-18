@@ -1,16 +1,13 @@
 """统一采集入口
 
-通过 subprocess 调用采集脚本(各平台 crawler 独立运行,需 Chrome/Playwright 环境)。
-采集完成后,数据通过 house_adapter 转换 → 入库 Listing 表。
-
-支持的平台:xhs(小红书) / douban(豆瓣) / wb(微博)
+直接在当前进程内调各平台 crawler(不再走 subprocess,避免进程管理复杂度)。
+采集 → extractor 提取 → 入库 Listing 表。
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import os
-import time
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -18,17 +15,7 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-#: 项目根(backend/)
 _BACKEND_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-
-#: 支持的平台 → 采集脚本路径映射
-PLATFORM_SCRIPTS = {
-    "xhs": "app/services/crawler/platforms/xhs/run_crawl.py",
-    "douban": "app/services/crawler/platforms/douban/run_crawl.py",
-    "wb": "app/services/crawler/platforms/weibo/run_crawl.py",
-}
-
-#: 采集数据输出目录
 DATA_DIR = _BACKEND_ROOT / "data"
 
 
@@ -42,103 +29,129 @@ async def run_crawl(
     enable_resume: bool = False,
     **kwargs: Any,
 ) -> dict:
-    """执行采集任务。
+    """执行采集任务(直接调 crawler core.py,不走 subprocess)。
 
-    流程:
-        1. subprocess 调用平台采集脚本(需 Chrome CDP 环境)
-        2. 采集数据落 data/<platform>/jsonl/
-        3. 用 house_adapter 转换成 Listing 格式
-        4. 返回结果(入库由调用方/Celery 处理)
-
-    Args:
-        platform: 平台(xhs/douban/wb)
-        keywords: 搜索关键词(逗号分隔)
-        max_count: 最大采集条数
-        login_type: 登录方式(qrcode/cookie)
-        cookies: cookie 字符串(cookie 登录时用)
-        enable_anti_detect: 是否启用反检测
-        enable_resume: 是否启用断点续爬
-
-    Returns:
-        {"platform":..., "status":..., "crawled":N, "data_files":[...]}
+    采集需要 Chrome CDP 环境(端口 9222)。如果 Chrome 没开,会返回提示。
+    采集结果落到 data/<platform>/jsonl/,然后可以用 get_crawled_listings 读取。
     """
-    if platform not in PLATFORM_SCRIPTS:
-        return {"platform": platform, "status": "error", "message": f"不支持的平台: {platform}"}
+    logger.info("crawl started", platform=platform, keywords=keywords)
 
-    logger.info("crawl started", platform=platform, keywords=keywords, max_count=max_count)
-
-    # 构造采集命令
-    cmd = [
-        "python3", "-u",
-        str(_BACKEND_ROOT / PLATFORM_SCRIPTS[platform]),
-        "--keywords", keywords or "",
-        "--max-count", str(max_count),
-        "--login-type", login_type,
-        "--save-option", "jsonl",
-    ]
+    # 设置采集配置(通过环境变量传给 crawler 的 config 模块)
+    os.environ.setdefault("CRAWLER_TYPE", "search")
+    os.environ.setdefault("LOGIN_TYPE", login_type)
+    if keywords:
+        os.environ["KEYWORDS"] = keywords
     if cookies:
-        cmd.extend(["--cookies", cookies])
-    if enable_anti_detect:
-        cmd.append("--anti-detect")
-    if enable_resume:
-        cmd.append("--resume")
+        os.environ["COOKIES"] = cookies
 
-    # 执行采集(subprocess,异步)
     try:
-        proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=str(_BACKEND_ROOT),
-        )
-        stdout, _ = await proc.communicate()
-        output = stdout.decode("utf-8", errors="replace") if stdout else ""
+        if platform == "xhs":
+            return await _crawl_xhs(keywords, max_count, login_type, cookies)
+        elif platform == "douban":
+            return await _crawl_douban(keywords, max_count, login_type, cookies)
+        elif platform == "wb":
+            return await _crawl_weibo(keywords, max_count, login_type, cookies)
+        else:
+            return {"platform": platform, "status": "error", "message": f"不支持的平台: {platform}"}
+    except Exception as e:
+        logger.error("crawl failed", platform=platform, error=str(e))
+        return {"platform": platform, "status": "failed", "message": str(e)}
 
-        if proc.returncode != 0:
-            logger.warning("crawl failed", platform=platform, returncode=proc.returncode)
-            return {
-                "platform": platform,
-                "status": "failed",
-                "message": f"采集进程退出码 {proc.returncode}",
-                "output": output[-500:],
-            }
-    except FileNotFoundError:
-        # 采集脚本不存在(阶段二尚未写 run_crawl.py),返回占位
-        logger.info("crawl script not found, returning placeholder", platform=platform)
-        return {
-            "platform": platform,
-            "status": "pending",
-            "message": f"采集脚本 {PLATFORM_SCRIPTS[platform]} 尚未实现,阶段二完成",
-        }
 
-    # 采集成功,扫描数据文件
-    platform_dir = DATA_DIR / platform / "jsonl"
-    data_files = []
-    if platform_dir.exists():
-        data_files = sorted(str(f) for f in platform_dir.glob("*.jsonl"))
+async def _crawl_xhs(keywords: str, max_count: int, login_type: str, cookies: str) -> dict:
+    """采集小红书"""
+    # 动态加载 crawler 配置 + core
+    from app.services.crawler.config import base_config as crawl_config
+    crawl_config.PLATFORM = "xhs"
+    crawl_config.KEYWORDS = keywords or crawl_config.KEYWORDS
+    crawl_config.LOGIN_TYPE = login_type
+    crawl_config.CRAWLER_TYPE = "search"
+    crawl_config.CRAWLER_MAX_NOTES_COUNT = max_count
+    crawl_config.SAVE_DATA_OPTION = "jsonl"
+    crawl_config.ENABLE_CDP_MODE = True
+    crawl_config.ENABLE_ANTI_DETECT = True
+    crawl_config.ENABLE_GET_MEIDAS = True      # 下载图片到本地(解决 CDN 过期)
+    crawl_config.ENABLE_GET_COMMENTS = True
+    if cookies:
+        crawl_config.COOKIES = cookies
 
+    from app.services.crawler.platforms.xhs.core import XiaoHongShuCrawler
+    crawler = XiaoHongShuCrawler()
+    crawler.anti_detect.enabled = True
+    await crawler.start()
+
+    # 采集完成,扫描数据文件
+    data_files = sorted(str(f) for f in (DATA_DIR / "xhs" / "jsonl").glob("*.jsonl")) if (DATA_DIR / "xhs" / "jsonl").exists() else []
     crawled = 0
     for fpath in data_files:
-        with open(fpath, encoding="utf-8") as f:
-            crawled += sum(1 for line in f if line.strip())
+        if "contents" in fpath:
+            with open(fpath, encoding="utf-8") as f:
+                crawled += sum(1 for line in f if line.strip())
 
-    logger.info("crawl done", platform=platform, crawled=crawled, files=len(data_files))
-    return {
-        "platform": platform,
-        "status": "success",
-        "crawled": crawled,
-        "data_files": data_files,
-    }
+    return {"platform": "xhs", "status": "success", "crawled": crawled, "data_files": data_files}
+
+
+async def _crawl_douban(keywords: str, max_count: int, login_type: str, cookies: str) -> dict:
+    """采集豆瓣"""
+    from app.services.crawler.config import base_config as crawl_config
+    crawl_config.PLATFORM = "douban"
+    crawl_config.KEYWORDS = keywords or crawl_config.KEYWORDS
+    crawl_config.LOGIN_TYPE = login_type
+    crawl_config.CRAWLER_TYPE = "search"
+    crawl_config.CRAWLER_MAX_NOTES_COUNT = max_count
+    crawl_config.SAVE_DATA_OPTION = "jsonl"
+    if cookies:
+        crawl_config.COOKIES = cookies
+
+    from app.services.crawler.platforms.douban.core import DoubanCrawler
+    crawler = DoubanCrawler()
+    await crawler.start()
+
+    data_files = sorted(str(f) for f in (DATA_DIR / "douban" / "jsonl").glob("*.jsonl")) if (DATA_DIR / "douban" / "jsonl").exists() else []
+    crawled = 0
+    for fpath in data_files:
+        if "contents" in fpath:
+            with open(fpath, encoding="utf-8") as f:
+                crawled += sum(1 for line in f if line.strip())
+
+    return {"platform": "douban", "status": "success", "crawled": crawled, "data_files": data_files}
+
+
+async def _crawl_weibo(keywords: str, max_count: int, login_type: str, cookies: str) -> dict:
+    """采集微博"""
+    from app.services.crawler.config import base_config as crawl_config
+    crawl_config.PLATFORM = "wb"
+    crawl_config.KEYWORDS = keywords or crawl_config.KEYWORDS
+    crawl_config.LOGIN_TYPE = login_type
+    crawl_config.CRAWLER_TYPE = "search"
+    crawl_config.CRAWLER_MAX_NOTES_COUNT = max_count
+    crawl_config.SAVE_DATA_OPTION = "jsonl"
+    if cookies:
+        crawl_config.COOKIES = cookies
+
+    from app.services.crawler.platforms.weibo.core import WeiboCrawler
+    crawler = WeiboCrawler()
+    await crawler.start()
+
+    data_files = sorted(str(f) for f in (DATA_DIR / "weibo" / "jsonl").glob("*.jsonl")) if (DATA_DIR / "weibo" / "jsonl").exists() else []
+    crawled = 0
+    for fpath in data_files:
+        if "contents" in fpath:
+            with open(fpath, encoding="utf-8") as f:
+                crawled += sum(1 for line in f if line.strip())
+
+    return {"platform": "wb", "status": "success", "crawled": crawled, "data_files": data_files}
 
 
 async def get_crawled_listings(platform: str, limit: int = 100) -> list[dict]:
-    """读取已采集数据,转成 house_pro Listing 格式。
-
-    复用 house_adapter/extractor + converter 的字段提取逻辑。
-    """
+    """读取已采集数据,转成 house_pro Listing 格式。"""
     from app.services.crawler.extractor import extract_listing_fields
 
-    platform_dir = DATA_DIR / platform / "jsonl"
+    # 映射 platform → 数据目录名
+    platform_dir_map = {"xhs": "xhs", "douban": "douban", "wb": "weibo"}
+    dir_name = platform_dir_map.get(platform, platform)
+
+    platform_dir = DATA_DIR / dir_name / "jsonl"
     if not platform_dir.exists():
         return []
 
@@ -155,12 +168,11 @@ async def get_crawled_listings(platform: str, limit: int = 100) -> list[dict]:
         if len(notes) >= limit:
             break
 
-    # 转成 Listing 格式
     source_map = {"xhs": "xiaohongshu", "douban": "douban", "wb": "weibo"}
     source = source_map.get(platform, platform)
     listings = []
     for note in notes[:limit]:
-        note_id = note.get("note_id") or note.get("topic_id") or ""
+        note_id = note.get("note_id") or note.get("topic_id") or note.get("mblog_id") or ""
         if not note_id:
             continue
         title = note.get("title", "") or ""
@@ -171,8 +183,8 @@ async def get_crawled_listings(platform: str, limit: int = 100) -> list[dict]:
             "source": source,
             "source_id": str(note_id),
             "source_url": note.get("note_url", ""),
-            "poster_id": note.get("creator_hash", ""),
-            "poster_name": note.get("nickname", ""),
+            "poster_id": note.get("creator_hash", "") or note.get("user_id", ""),
+            "poster_name": note.get("nickname", "") or note.get("user_nickname", ""),
             "title": title,
             "content": content,
             "price": fields["price"],

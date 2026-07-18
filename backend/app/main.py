@@ -10,6 +10,7 @@ from app.core.errors import AppException
 from app.core.logging import setup_logging, get_logger
 from app.core.middleware import RequestIdMiddleware
 from app.routers import auth, profiles, listings, scores, search, recommend, favorites, insights, crawl
+from app.routers import images as images_router
 
 setup_logging()
 logger = get_logger(__name__)
@@ -97,3 +98,4 @@ app.include_router(recommend.router)
 app.include_router(favorites.router)
 app.include_router(insights.router)
 app.include_router(crawl.router)
+app.include_router(images_router.router)

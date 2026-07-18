@@ -3,7 +3,7 @@ from datetime import datetime
 from uuid import UUID, uuid4
 
 from sqlalchemy import String, Integer, Boolean, DateTime, ForeignKey, func
-from sqlalchemy.dialects.postgresql import UUID as PgUUID
+import uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -12,12 +12,12 @@ from app.database import Base
 class Task(Base):
     __tablename__ = "tasks"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     profile_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE")
+        String(36), ForeignKey("profiles.id", ondelete="CASCADE")
     )
     name: Mapped[str] = mapped_column(String(100))
 
@@ -33,15 +33,15 @@ class Task(Base):
 class Notification(Base):
     __tablename__ = "notifications"
 
-    id: Mapped[UUID] = mapped_column(PgUUID(as_uuid=True), primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     user_id: Mapped[UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), index=True
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     task_id: Mapped[UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
+        String(36), ForeignKey("tasks.id", ondelete="SET NULL"), nullable=True
     )
     listing_id: Mapped[UUID | None] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("listings.id", ondelete="CASCADE"), nullable=True
+        String(36), ForeignKey("listings.id", ondelete="CASCADE"), nullable=True
     )
 
     title: Mapped[str] = mapped_column(String(200))
