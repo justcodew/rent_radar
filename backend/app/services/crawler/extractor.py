@@ -345,33 +345,36 @@ def extract_tags(text: str) -> dict[str, Any]:
     if has_balcony:
         tags["balcony"] = "有阳台"
 
-    # 2. 电梯/步梯类型 + 具体楼层
+    # 2. 电梯/步梯类型 + 具体楼层(合并为一个标签,避免重合)
     has_stairs = any(kw in text for kw in STAIRS_KEYWORDS)
     elevator_type = _detect_elevator_type(text, has_stairs)
-    if elevator_type:
-        tags["elevator"] = elevator_type
 
-    # 楼层详情:始终显示具体楼层数字
     floor_desc, floor_num = _extract_floor_level(text)
-    if floor_desc:
-        tags["floor_desc"] = floor_desc
-    if floor_num:
-        tags["floor_num"] = floor_num
+
+    # 合并显示:电梯类型 + 楼层 → 一个标签
+    if elevator_type and floor_num:
         is_stairs = "步梯" in (elevator_type or "") or has_stairs
         if is_stairs:
             if floor_num <= 3:
-                tags["floor_note"] = f"步梯{floor_num}楼·低层"
+                tags["floor_note"] = f"步梯{floor_num}楼，低层"
             elif floor_num <= 5:
-                tags["floor_note"] = f"步梯{floor_num}楼·中层"
+                tags["floor_note"] = f"步梯{floor_num}楼，中层"
             elif floor_num <= 7:
-                tags["floor_note"] = f"步梯{floor_num}楼·高层"
+                tags["floor_note"] = f"步梯{floor_num}楼，高层"
             else:
-                tags["floor_note"] = f"步梯{floor_num}楼·超高层⚠️"
+                tags["floor_note"] = f"步梯{floor_num}楼，超高层⚠️"
         else:
-            tags["floor_note"] = f"{floor_num}楼"
+            tags["floor_note"] = f"{elevator_type}{floor_num}楼"
+    elif elevator_type:
+        tags["floor_note"] = elevator_type
+    elif floor_num:
+        tags["floor_note"] = f"{floor_num}楼"
     elif floor_desc:
-        # 有描述但没提取到数字(如"低楼层"/"中楼层")
         tags["floor_note"] = floor_desc
+
+    # 楼层数字(单独存,供前端评级用)
+    if floor_num:
+        tags["floor_num"] = floor_num
 
     # 3. 朝向(复用已有函数)
     orientation = extract_orientation(text)
