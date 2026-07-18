@@ -365,6 +365,9 @@ def extract_tags(text: str) -> dict[str, Any]:
                 tags["floor_note"] = f"步梯{floor_num}楼，超高层⚠️"
         else:
             tags["floor_note"] = f"{elevator_type}{floor_num}楼"
+    elif elevator_type and floor_desc:
+        # 有电梯类型 + 楼层描述(但没提取到数字,如"中楼层")
+        tags["floor_note"] = f"{elevator_type}·{floor_desc}"
     elif elevator_type:
         tags["floor_note"] = elevator_type
     elif floor_num:
