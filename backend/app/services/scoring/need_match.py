@@ -253,16 +253,22 @@ async def match_listings_by_need(
     sig = _sig(description, city)
     cache_key = REDIS_NEED_MATCH_KEY.format(sig=sig)
 
-    if not force:
-        cached = await redis.get(cache_key)
-        if cached:
-            cached_data = json.loads(cached)
-            # 缓存里也要重新查 listings（数据可能更新）
-            listings = await _query_listings(db, cached_data.get("extracted", {}), limit)
-            return {**cached_data, "listings": listings, "from_cache": True}
+    if redis and not force:
+        try:
+            cached = await redis.get(cache_key)
+            if cached:
+                cached_data = json.loads(cached)
+                listings = await _query_listings(db, cached_data.get("extracted", {}), limit)
+                return {**cached_data, "listings": listings, "from_cache": True}
+        except Exception:
+            pass
 
-    if not await check_budget(redis):
-        return {"skipped": True, "reason": "AI 月度/日度预算超出"}
+    if redis:
+        try:
+            if not await check_budget(redis):
+                return {"skipped": True, "reason": "AI 月度/日度预算超出"}
+        except Exception:
+            pass
 
     if not settings.LLM_API_KEY or not settings.LLM_BASE_URL:
         return {"skipped": True, "reason": "LLM 未配置"}
@@ -278,12 +284,16 @@ async def match_listings_by_need(
 
     estimated_cost = 0.15
     now = datetime.now(timezone.utc)
-    monthly_key = "ai:cost:monthly:" + now.strftime("%Y%m")
-    daily_key = "ai:cost:daily:" + now.strftime("%Y%m%d")
-    await redis.incrbyfloat(monthly_key, estimated_cost)
-    await redis.incrbyfloat(daily_key, estimated_cost)
-    await redis.expire(monthly_key, 31 * 86400)
-    await redis.expire(daily_key, 86400)
+    if redis:
+        try:
+            monthly_key = "ai:cost:monthly:" + now.strftime("%Y%m")
+            daily_key = "ai:cost:daily:" + now.strftime("%Y%m%d")
+            await redis.incrbyfloat(monthly_key, estimated_cost)
+            await redis.incrbyfloat(daily_key, estimated_cost)
+            await redis.expire(monthly_key, 31 * 86400)
+            await redis.expire(daily_key, 86400)
+        except Exception:
+            pass
 
     extracted = _normalize_extracted(result.get("extracted"))
     communities = _normalize_communities(result.get("communities"))
@@ -310,6 +320,10 @@ async def match_listings_by_need(
         "analyzed_at": now.isoformat(),
         "estimated_cost_cny": estimated_cost,
     }
-    await redis.set(cache_key, json.dumps(cache_payload, ensure_ascii=False), ex=NEED_MATCH_CACHE_TTL)
+    if redis:
+        try:
+            await redis.set(cache_key, json.dumps(cache_payload, ensure_ascii=False), ex=NEED_MATCH_CACHE_TTL)
+        except Exception:
+            pass
 
     return response

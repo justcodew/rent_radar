@@ -36,7 +36,10 @@ async def community_insights(
     db: AsyncSession = Depends(get_db),
 ):
     """小区综合测评（稀疏输入也能用）"""
-    redis = await get_redis()
+    try:
+        redis = await get_redis()
+    except Exception:
+        redis = None
     payload = req.model_dump(exclude={"force"})
     result = await generate_community_insights(db, redis, payload, force=req.force)
     return ok(result)
@@ -55,7 +58,10 @@ async def match_by_need(
     db: AsyncSession = Depends(get_db),
 ):
     """自然语言选房：LLM 提取需求 + 推荐小区 + 数据库匹配房源"""
-    redis = await get_redis()
+    try:
+        redis = await get_redis()
+    except Exception:
+        redis = None
     result = await match_listings_by_need(
         db, redis, req.description, req.city or "广州", req.limit, force=req.force
     )
