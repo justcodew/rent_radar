@@ -229,9 +229,78 @@ BALCONY_KEYWORDS = ["阳台", "露台", "大阳台", "南向阳台"]
 ELEVATOR_KEYWORDS = ["电梯", "有电梯", "带电梯", "电梯房", "电梯楼", "有电梯的"]
 STAIRS_KEYWORDS = ["步梯", "楼梯", "楼梯房", "无电梯", "没电梯", "不带电梯", "步行梯"]
 
+# 原生电梯关键词(区分加装电梯 vs 原生电梯)
+ORIGINAL_ELEVATOR_KEYWORDS = [
+    "原生电梯", "原装电梯", "电梯洋房", "电梯高层", "电梯公寓",
+    "带电梯的", "电梯直搂", "电梯入户", "电梯小高层", "电梯高层",
+]
+ADDED_ELEVATOR_KEYWORDS = [
+    "加装电梯", "电梯已安装", "电梯已加装", "加装了电梯", "电梯正在安装",
+    "电梯已通", "电梯已验收", "后装电梯", "已加装",
+]
+
+# 楼层数字提取模式
+FLOOR_LEVEL_PATTERNS = [
+    r"步梯\s*(\d{1,2})\s*楼",
+    r"(\d{1,2})\s*楼.*?步梯",
+    r"(\d{1,2})\s*/\s*\d{1,2}\s*层",
+    r"(\d{1,2})\s*楼",
+    r"低楼层|中楼层|高楼层|顶层|底层",
+    r"一楼|二楼|三楼|四楼|五楼|六楼|七楼|八楼|九楼",
+]
+
+FLOOR_CN_TO_NUM = {"一": 1, "二": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+
+
+def _extract_floor_level(text: str) -> tuple[str | None, int | None]:
+    """提取楼层信息:返回 (楼层描述, 楼层数字)
+
+    如 "步梯5楼" → ("步梯5楼", 5)
+    "6/9层" → ("6/9层", 6)
+    "三楼" → ("三楼", 3)
+    """
+    for p in FLOOR_LEVEL_PATTERNS:
+        m = re.search(p, text)
+        if m:
+            raw = m.group(0)
+            # 尝试提取数字
+            num = None
+            num_m = re.search(r"(\d{1,2})", raw)
+            if num_m:
+                num = int(num_m.group(1))
+            else:
+                # 中文数字
+                for cn, n in FLOOR_CN_TO_NUM.items():
+                    if cn in raw:
+                        num = n
+                        break
+            return raw, num
+    return None, None
+
+
+def _detect_elevator_type(text: str, has_stairs: bool) -> str | None:
+    """判断电梯类型:原生电梯 / 加装电梯 / 步梯"""
+    # 先查加装关键词
+    is_added = any(kw in text for kw in ADDED_ELEVATOR_KEYWORDS)
+    if is_added:
+        return "加装电梯"
+    # 再查原生电梯
+    is_original = any(kw in text for kw in ORIGINAL_ELEVATOR_KEYWORDS)
+    has_elevator = any(kw in text for kw in ELEVATOR_KEYWORDS)
+
+    if is_original:
+        return "原生电梯"
+    if has_elevator and has_stairs:
+        return "加装电梯"  # 同时提到步梯+电梯,大概率加装
+    if has_elevator:
+        return "电梯"  # 有电梯但无法判断原生还是加装
+    if has_stairs:
+        return "步梯"
+    return None
+
 
 def extract_tags(text: str) -> dict[str, Any]:
-    """提取关键标签:阳台/电梯步梯/朝向/地铁站/面积/已租出"""
+    """提取关键标签:阳台/电梯步梯(含楼层)/朝向/地铁站/面积/已租出"""
     tags: dict[str, Any] = {}
 
     # 1. 阳台
@@ -240,24 +309,37 @@ def extract_tags(text: str) -> dict[str, Any]:
     if has_balcony:
         tags["balcony"] = "有阳台"
 
-    # 2. 电梯/步梯
-    has_elevator = any(kw in text for kw in ELEVATOR_KEYWORDS)
+    # 2. 电梯/步梯类型 + 楼层
     has_stairs = any(kw in text for kw in STAIRS_KEYWORDS)
-    if has_elevator and not has_stairs:
-        tags["elevator"] = "电梯"
-    elif has_stairs and not has_elevator:
-        tags["elevator"] = "步梯"
-    elif has_stairs and has_elevator:
-        # 同时提到(如"步梯5楼,电梯已安装")
-        tags["elevator"] = "电梯(加装)"
-    # 楼层信息里也能判断
-    if "elevator" not in tags:
-        floor = extract_floor(text)
-        if floor:
-            if "电梯" in floor or "电梯" in text:
-                tags["elevator"] = "电梯"
+    elevator_type = _detect_elevator_type(text, has_stairs)
+    if elevator_type:
+        tags["elevator"] = elevator_type
+
+    # 楼层详情
+    floor_desc, floor_num = _extract_floor_level(text)
+    if floor_desc:
+        tags["floor_desc"] = floor_desc
+    if floor_num:
+        tags["floor_num"] = floor_num
+        # 楼层评级(步梯影响大,电梯影响小)
+        is_stairs = "步梯" in (elevator_type or "") or has_stairs
+        if is_stairs:
+            if floor_num <= 3:
+                tags["floor_note"] = f"步梯{floor_num}楼(低层,可接受)"
+            elif floor_num <= 5:
+                tags["floor_note"] = f"步梯{floor_num}楼(中层,略累)"
+            elif floor_num <= 7:
+                tags["floor_note"] = f"步梯{floor_num}楼(高层,较累)"
             else:
-                tags["elevator"] = "步梯"
+                tags["floor_note"] = f"步梯{floor_num}楼(超高层,慎重!)"
+        else:
+            # 有电梯的楼层不太敏感,但仍提示
+            if floor_num <= 3:
+                tags["floor_note"] = f"{floor_num}楼(低层)"
+            elif floor_num >= 8:
+                tags["floor_note"] = f"{floor_num}楼(高层,视野好)"
+            else:
+                tags["floor_note"] = f"{floor_num}楼(中层)"
 
     # 3. 朝向(复用已有函数)
     orientation = extract_orientation(text)
@@ -269,7 +351,6 @@ def extract_tags(text: str) -> dict[str, Any]:
     if metro_hits:
         tags["metro_stations"] = metro_hits[:3]  # 最多3个
     # 也匹配 🚇 + 地名模式
-    import re
     metro_emoji = re.findall(r"🚇\s*(\S{2,6})", text)
     for m in metro_emoji:
         clean = m.strip("🚇📍✨🍃💰🏠")

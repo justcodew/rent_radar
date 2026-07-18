@@ -16,7 +16,7 @@ export default function ListingDetailPage() {
   const [score, setScore] = useState<ScoreDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [aiLoading, setAiLoading] = useState(false);
-  const [tab, setTab] = useState<"insights" | "score" | "original">("insights");
+  const [tab, setTab] = useState<"original" | "insights" | "score">("original");
   const isAuth = useAuthStore((s) => !!s.accessToken);
   const showToast = useUIStore((s) => s.showToast);
 
@@ -128,10 +128,27 @@ export default function ListingDetailPage() {
                 )}
                 {(listing as any).tags.elevator && (
                   <span className={`px-2 py-0.5 rounded text-sm ${
-                    (listing as any).tags.elevator.startsWith("电梯")
-                      ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                    (listing as any).tags.elevator.includes("加装")
+                      ? "bg-amber-50 text-amber-700"
+                      : (listing as any).tags.elevator.includes("原生") || (listing as any).tags.elevator === "电梯"
+                      ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-600"
                   }`}>
-                    {(listing as any).tags.elevator.startsWith("电梯") ? "🛗" : "🚶"} {(listing as any).tags.elevator}
+                    {(listing as any).tags.elevator.includes("加装") ? "🔧" :
+                     (listing as any).tags.elevator.includes("步梯") ? "🚶" : "🛗"} {(listing as any).tags.elevator}
+                  </span>
+                )}
+                {(listing as any).tags.floor_note && (
+                  <span className={`px-2 py-0.5 rounded text-sm ${
+                    (listing as any).tags.floor_num <= 3 ? "bg-green-50 text-green-700" :
+                    (listing as any).tags.floor_num <= 5 ? "bg-yellow-50 text-yellow-700" :
+                    "bg-red-50 text-red-700"
+                  }`}>
+                    {(listing as any).tags.floor_note}
+                  </span>
+                )}
+                {!(listing as any).tags.floor_note && (listing as any).tags.floor_desc && (
+                  <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded text-sm">
+                    📐 {(listing as any).tags.floor_desc}
                   </span>
                 )}
                 {(listing as any).tags.orientation && (
@@ -213,8 +230,16 @@ export default function ListingDetailPage() {
         </div>
       )}
 
-      {/* Tab 切换 */}
+      {/* Tab 切换:原帖优先 → AI洞察 → 评分 */}
       <div className="flex gap-1 border-b">
+        <button
+          onClick={() => setTab("original")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            tab === "original" ? "border-brand-500 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          📄 原帖内容
+        </button>
         <button
           onClick={() => setTab("insights")}
           className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
@@ -230,14 +255,6 @@ export default function ListingDetailPage() {
           }`}
         >
           📊 评分雷达
-        </button>
-        <button
-          onClick={() => setTab("original")}
-          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-            tab === "original" ? "border-brand-500 text-brand-600" : "border-transparent text-gray-500 hover:text-gray-700"
-          }`}
-        >
-          📄 原帖
         </button>
       </div>
 
