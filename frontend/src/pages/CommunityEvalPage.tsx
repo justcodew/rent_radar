@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { insightsApi } from "../services/api";
+import { useState, useEffect } from "react";
+import { insightsApi, promptApi } from "../services/api";
 import type { InsightsResult } from "../types";
 import InsightsCard from "../components/InsightsCard";
 import { useUIStore } from "../stores/ui";
@@ -22,6 +22,45 @@ export default function CommunityEvalPage() {
   const [result, setResult] = useState<InsightsResult | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const showToast = useUIStore((s) => s.showToast);
+
+  // 提示词编辑器状态
+  const [showPrompts, setShowPrompts] = useState(false);
+  const [promptSystem, setPromptSystem] = useState("");
+  const [promptUser, setPromptUser] = useState("");
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [isCustom, setIsCustom] = useState(false);
+
+  useEffect(() => {
+    // 加载当前提示词
+    promptApi.getCommunity().then((r: any) => {
+      setPromptSystem(r.system || "");
+      setPromptUser(r.user_template || "");
+      setIsCustom(r.is_custom || false);
+    }).catch(() => {});
+  }, []);
+
+  const savePrompts = async () => {
+    setPromptLoading(true);
+    try {
+      await promptApi.updateCommunity({ system: promptSystem, user_template: promptUser });
+      showToast("提示词已保存");
+      setIsCustom(true);
+    } catch { showToast("保存失败"); }
+    finally { setPromptLoading(false); }
+  };
+
+  const resetPrompts = async () => {
+    setPromptLoading(true);
+    try {
+      await promptApi.resetCommunity();
+      const r: any = await promptApi.getCommunity();
+      setPromptSystem(r.default_system || "");
+      setPromptUser(r.default_user_template || "");
+      setIsCustom(false);
+      showToast("已恢复默认提示词");
+    } catch { showToast("重置失败"); }
+    finally { setPromptLoading(false); }
+  };
 
   const set = (k: keyof typeof form, v: string) =>
     setForm((f) => ({ ...f, [k]: v }));
@@ -208,6 +247,74 @@ export default function CommunityEvalPage() {
                 {name}
               </button>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* 可折叠:提示词编辑器 */}
+      <div className="card overflow-hidden">
+        <button
+          onClick={() => setShowPrompts(!showPrompts)}
+          className="w-full flex items-center justify-between px-5 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <span>{showPrompts ? "▼" : "▶"}</span>
+            🤖 AI 提示词
+            {isCustom && <span className="badge bg-amber-100 text-amber-700 text-xs">已自定义</span>}
+          </span>
+          <span className="text-xs text-gray-400">点击{showPrompts ? "收起" : "展开"}查看/修改</span>
+        </button>
+
+        {showPrompts && (
+          <div className="px-5 pb-5 space-y-4 border-t border-gray-100">
+            <div className="pt-4">
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                System Prompt(系统人设)
+              </label>
+              <textarea
+                className="input font-mono text-xs min-h-[100px]"
+                value={promptSystem}
+                onChange={(e) => setPromptSystem(e.target.value)}
+                placeholder="可用占位符:{city}(城市名)、{persona}(本地角色名)"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">
+                User Prompt 模板(用户指令 + JSON 输出格式)
+              </label>
+              <textarea
+                className="input font-mono text-xs min-h-[250px]"
+                value={promptUser}
+                onChange={(e) => setPromptUser(e.target.value)}
+                placeholder="可用占位符:{facts_str}(事实片段)、{price_hint}(均价参考)、{persona}(角色名)"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={savePrompts}
+                disabled={promptLoading}
+                className="btn-primary text-sm px-4"
+              >
+                {promptLoading ? "保存中..." : "💾 保存提示词"}
+              </button>
+              {isCustom && (
+                <button
+                  onClick={resetPrompts}
+                  disabled={promptLoading}
+                  className="btn-secondary text-sm px-4"
+                >
+                  ↩ 恢复默认
+                </button>
+              )}
+            </div>
+            <div className="text-xs text-gray-400 leading-relaxed">
+              💡 占位符说明:<code className="bg-gray-100 px-1 rounded">{"{city}"}</code> 城市名 ·
+              <code className="bg-gray-100 px-1 rounded ml-1">{"{persona}"}</code> 本地角色 ·
+              <code className="bg-gray-100 px-1 rounded ml-1">{"{facts_str}"}</code> 用户输入的事实 ·
+              <code className="bg-gray-100 px-1 rounded ml-1">{"{price_hint}"}</code> 区域均价参考
+              <br />
+              JSON 双括号 <code className="bg-gray-100 px-1 rounded">{"{{}}"}</code> 会被保留为字面量(不会替换)。
+            </div>
           </div>
         )}
       </div>

@@ -109,3 +109,11 @@ export const crawlApi = {
   ingest: (params: { platform: string; limit?: number }) =>
     http.post<unknown, any>("/crawl/ingest", null, { params }),
 };
+
+// ===== Prompts(提示词管理) =====
+export const promptApi = {
+  getCommunity: () => http.get<unknown, any>("/prompts/community"),
+  updateCommunity: (data: { system?: string; user_template?: string }) =>
+    http.put<unknown, any>("/prompts/community", data),
+  resetCommunity: () => http.post<unknown, any>("/prompts/community/reset"),
+};

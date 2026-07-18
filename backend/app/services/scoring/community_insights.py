@@ -45,18 +45,72 @@ def _sig(payload: dict[str, Any]) -> str:
     return hashlib.sha256(norm.encode()).hexdigest()[:16]
 
 
+# ===== 可编辑的提示词模板(用户可通过 API 覆盖) =====
+# {city} 和 {persona} 是占位符,运行时替换
+
+DEFAULT_SYSTEM_PROMPT = (
+    "你是一个在{city}生活了 10 年的「{persona}」，对各小区、地铁、商圈、楼龄门儿清。"
+    "现在帮一个准备租房/买房的朋友客观分析一个小区或住处，用朋友聊天的口吻，"
+    "专业但接地气，不绕弯子。"
+    "注意：用户输入的信息可能很稀疏（甚至只给个名字），你需要靠你的城市常识和推理能力补全判断，"
+    "不确定的地方就用 confidence 字段如实反映，不要瞎编具体数据。"
+    "严格按 JSON 格式输出，所有字段都要填。"
+)
+
+DEFAULT_USER_PROMPT_TEMPLATE = """帮我看看这个地方：
+【用户给的片段】{facts_str}{price_hint}
+
+请用「{persona}」的口吻告诉我（一定要 JSON 格式）：
+{{
+  "community_profile": "如果你认识这小区/这片区域，说说它什么年代建的、什么类型（电梯房/步梯房/公寓/小区/城中村）、住什么人多、整体定位。完全不认识就如实说'对这小区没印象'，靠周边信息推断。",
+  "surroundings": {{
+    "subway": [{{"name": "地铁站名+线路", "walk_min": 估算步行分钟数整数, "confidence": 0.0-1.0}}],
+    "school": [{{"name": "学校名", "type": "小学/中学/大学", "walk_min": 步行分钟}}],
+    "hospital": [{{"name": "医院名", "level": "三甲/二甲/社区", "walk_min": 步行分钟}}],
+    "mall": [{{"name": "商场/超市/菜场名", "type": "商场/超市/菜场", "walk_min": 步行分钟}}]
+  }},
+  "surroundings_confidence": 0.0-1.0,
+  "pros": ["3-5 条优点（信息不全就少写，靠地段+常识推理）"],
+  "cons": ["3-5 条潜在坑（楼龄/噪音/采光/物业/邻居/通勤等，站在租客角度）"],
+  "price_verdict": "用户给了价格就评价贵/合理/便宜；没给就说'用户未提供价格，无法评价'",
+  "tips": ["2-3 条看房/砍价/避坑建议"],
+  "recommendation": "值得看 / 谨慎看 / 别看 / 不确定（四选一，信息严重不足就选不确定）",
+  "summary": "一句话总结，30 字以内",
+  "confidence": 0.0-1.0
+}}
+
+重要：
+- surroundings 每类至少给 1 条（最多 3 条），完全不认识写 []，对应类别 confidence 写低。
+- 不确定的距离只能给粗估步行分钟数。
+- 信息严重不全（比如只有小区名还是冷门小区）就把整体 confidence 写 0.3-0.5，别装得很懂。"""
+
+# 运行时覆盖(空=用默认)
+_custom_system: str | None = None
+_custom_user: str | None = None
+
+
+def get_prompts() -> dict:
+    """获取当前提示词(默认 + 自定义)"""
+    return {
+        "system": _custom_system or DEFAULT_SYSTEM_PROMPT,
+        "user_template": _custom_user or DEFAULT_USER_PROMPT_TEMPLATE,
+        "is_custom": _custom_system is not None or _custom_user is not None,
+    }
+
+
+def set_prompts(system: str | None = None, user: str | None = None) -> None:
+    """设置自定义提示词(None = 恢复默认)"""
+    global _custom_system, _custom_user
+    _custom_system = system if system and system.strip() else None
+    _custom_user = user if user and user.strip() else None
+
+
 def _build_prompt(payload: dict[str, Any], area_avg_price: int | None) -> tuple[str, str]:
     city = payload.get("city") or "广州"
     persona = CITY_PERSONA.get(city, "本地朋友")
 
-    system = (
-        f"你是一个在{city}生活了 10 年的「{persona}」，对各小区、地铁、商圈、楼龄门儿清。"
-        f"现在帮一个准备租房/买房的朋友客观分析一个小区或住处，用朋友聊天的口吻，"
-        f"专业但接地气，不绕弯子。"
-        f"注意：用户输入的信息可能很稀疏（甚至只给个名字），你需要靠你的城市常识和推理能力补全判断，"
-        f"不确定的地方就用 confidence 字段如实反映，不要瞎编具体数据。"
-        f"严格按 JSON 格式输出，所有字段都要填。"
-    )
+    # 使用可编辑的提示词模板
+    system = (_custom_system or DEFAULT_SYSTEM_PROMPT).format(city=city, persona=persona)
 
     # 拼接用户给的事实片段
     facts = []
@@ -84,32 +138,9 @@ def _build_prompt(payload: dict[str, Any], area_avg_price: int | None) -> tuple[
     if area_avg_price:
         price_hint = f"\n【参考】{payload.get('area_name') or city} 同区域均价 ≈ {area_avg_price}元/月"
 
-    user = f"""帮我看看这个地方：
-【用户给的片段】{facts_str}{price_hint}
-
-请用「{persona}」的口吻告诉我（一定要 JSON 格式）：
-{{
-  "community_profile": "如果你认识这小区/这片区域，说说它什么年代建的、什么类型（电梯房/步梯房/公寓/小区/城中村）、住什么人多、整体定位。完全不认识就如实说'对这小区没印象'，靠周边信息推断。",
-  "surroundings": {{
-    "subway": [{{"name": "地铁站名+线路", "walk_min": 估算步行分钟数整数, "confidence": 0.0-1.0}}],
-    "school": [{{"name": "学校名", "type": "小学/中学/大学", "walk_min": 步行分钟}}],
-    "hospital": [{{"name": "医院名", "level": "三甲/二甲/社区", "walk_min": 步行分钟}}],
-    "mall": [{{"name": "商场/超市/菜场名", "type": "商场/超市/菜场", "walk_min": 步行分钟}}]
-  }},
-  "surroundings_confidence": 0.0-1.0,
-  "pros": ["3-5 条优点（信息不全就少写，靠地段+常识推理）"],
-  "cons": ["3-5 条潜在坑（楼龄/噪音/采光/物业/邻居/通勤等，站在租客角度）"],
-  "price_verdict": "用户给了价格就评价贵/合理/便宜；没给就说'用户未提供价格，无法评价'",
-  "tips": ["2-3 条看房/砍价/避坑建议"],
-  "recommendation": "值得看 / 谨慎看 / 别看 / 不确定（四选一，信息严重不足就选不确定）",
-  "summary": "一句话总结，30 字以内",
-  "confidence": 0.0-1.0
-}}
-
-重要：
-- surroundings 每类至少给 1 条（最多 3 条），完全不认识写 []，对应类别 confidence 写低。
-- 不确定的距离只能给粗估步行分钟数。
-- 信息严重不全（比如只有小区名还是冷门小区）就把整体 confidence 写 0.3-0.5，别装得很懂。"""
+    user = (_custom_user or DEFAULT_USER_PROMPT_TEMPLATE).format(
+        facts_str=facts_str, price_hint=price_hint, persona=persona
+    )
 
     return system, user
 
