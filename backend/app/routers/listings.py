@@ -45,8 +45,9 @@ def _rewrite_images(item: dict) -> dict:
             # 本地已下载
             result.append(f"/api/v1/images/{platform_dir}/{source_id}/{filename}")
         else:
-            # 远程代理
-            result.append(f"/api/v1/images/proxy?url={url}")
+            # 远程代理(URL encode 避免特殊字符破坏路径)
+            from urllib.parse import quote
+            result.append(f"/api/v1/images/proxy?url={quote(url, safe='')}")
     item["image_urls"] = result
     return item
 

@@ -49,12 +49,16 @@ async def proxy_image(url: str):
     """代理远程图片(解决防盗链)。
 
     用法: /api/v1/images/proxy?url=https://...
+    如果远程返回 403/404(URL 过期),返回一个 SVG 占位图。
     """
+    from urllib.parse import unquote
+    url = unquote(url)
+
     if not url.startswith(("http://", "https://")):
         raise HTTPException(status_code=400, detail="Invalid URL")
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
+        async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 url,
                 headers={
@@ -67,20 +71,27 @@ async def proxy_image(url: str):
                     content=resp.content,
                     media_type=resp.headers.get("content-type", "image/jpeg"),
                 )
-            raise HTTPException(status_code=502, detail=f"Upstream returned {resp.status_code}")
-    except httpx.HTTPError as e:
-        raise HTTPException(status_code=502, detail=str(e))
+    except Exception:
+        pass
+
+    # 远程失败 → 返回 SVG 占位图(基于 URL hash 生成不同颜色)
+    import hashlib
+    color_hash = hashlib.md5(url.encode()).hexdigest()[:6]
+    r, g, b = int(color_hash[0:2], 16), int(color_hash[2:4], 16), int(color_hash[4:6], 16)
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+<rect width="400" height="300" fill="#{color_hash}" opacity="0.3"/>
+<text x="200" y="150" text-anchor="middle" fill="#999" font-size="14" font-family="sans-serif">房源图片</text>
+</svg>'''
+    return Response(content=svg.encode(), media_type="image/svg+xml")
 
 
 def rewrite_image_urls(image_urls: list[str], platform: str = "xhs") -> list[str]:
-    """把远程图片 URL 转换为后端代理 URL。
-
-    前端通过 /api/v1/images/proxy?url=xxx 访问,后端带 Referer 转发。
-    """
+    """把远程图片 URL 转换为后端代理 URL。"""
+    from urllib.parse import quote
     result = []
     for url in image_urls:
         if not url or not url.startswith(("http://", "https://")):
             continue
-        # 用代理 URL
-        result.append(f"/api/v1/images/proxy?url={url}")
+        result.append(f"/api/v1/images/proxy?url={quote(url, safe='')}")
+    return result
     return result
