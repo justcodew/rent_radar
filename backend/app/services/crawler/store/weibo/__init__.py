@@ -26,7 +26,7 @@ import re
 from typing import List
 
 from app.services.crawler.core.tools.user_hash import anonymize_user_id, mask_nickname
-from var import source_keyword_var
+from app.services.crawler.core.var import source_keyword_var
 
 from .weibo_store_media import *
 from ._store_impl import *

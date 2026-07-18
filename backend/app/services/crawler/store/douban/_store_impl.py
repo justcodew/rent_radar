@@ -10,7 +10,7 @@ from typing import Dict
 from app.services.crawler.config import base_config as config
 from app.services.crawler.core.base.base_crawler import AbstractStore
 from app.services.crawler.core.tools.async_file_writer import AsyncFileWriter
-from var import crawler_type_var
+from app.services.crawler.core.var import crawler_type_var
 
 
 def _note_to_dict(note) -> Dict:

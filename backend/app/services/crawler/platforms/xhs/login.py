@@ -29,7 +29,7 @@ from tenacity import (RetryError, retry, retry_if_result, stop_after_attempt,
 
 from app.services.crawler.config import base_config as config
 from app.services.crawler.core.base.base_crawler import AbstractLogin
-from cache.cache_factory import CacheFactory
+from app.services.crawler.core.cache.cache_factory import CacheFactory
 from app.services.crawler.core.tools import utils
 
 

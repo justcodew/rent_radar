@@ -11,7 +11,7 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Type
 
-from sign_service.models import SignRequest, SignResponse
+from app.services.crawler.sign_service.models import SignRequest, SignResponse
 
 
 class SignProvider(ABC):

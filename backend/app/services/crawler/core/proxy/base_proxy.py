@@ -28,8 +28,8 @@ from abc import ABC, abstractmethod
 from typing import List
 
 from app.services.crawler.config import base_config as config
-from cache.abs_cache import AbstractCache
-from cache.cache_factory import CacheFactory
+from app.services.crawler.core.cache.abs_cache import AbstractCache
+from app.services.crawler.core.cache.cache_factory import CacheFactory
 from app.services.crawler.core.tools.utils import utils
 
 from .types import IpInfoModel

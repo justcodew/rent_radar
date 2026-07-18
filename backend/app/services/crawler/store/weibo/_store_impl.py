@@ -35,12 +35,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.crawler.config import base_config as config
 from app.services.crawler.core.base.base_crawler import AbstractStore
-from database.models import WeiboNote, WeiboNoteComment
+
 from app.services.crawler.core.tools import utils, words
 from app.services.crawler.core.tools.async_file_writer import AsyncFileWriter
-from database.db_session import get_session
-from var import crawler_type_var
-from database.mongodb_store_base import MongoDBStoreBase
+from app.database import get_db as get_session
+from app.services.crawler.core.var import crawler_type_var
+
 
 
 def calculate_number_of_files(file_store_path: str) -> int:

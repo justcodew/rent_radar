@@ -8,8 +8,8 @@
 # 复用 media_platform.xhs.playwright_sign.sign_with_xhshow (纯算法,依赖 xhshow 库)
 # 该模块在 import 时会执行 monkey-patch(_patch_xhshow_a3_hash),故在服务侧 import 即可生效。
 
-from sign_service.models import SignRequest, SignResponse
-from sign_service.providers.base import SignProvider, registry
+from app.services.crawler.sign_service.models import SignRequest, SignResponse
+from app.services.crawler.sign_service.providers.base import SignProvider, registry
 
 
 class XhsSignProvider(SignProvider):

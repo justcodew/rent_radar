@@ -39,7 +39,7 @@ from app.services.crawler.core.proxy.proxy_ip_pool import IpInfoModel, create_ip
 from app.services.crawler.store import xhs as xhs_store
 from app.services.crawler.core.tools import utils
 from app.services.crawler.core.tools.cdp_browser import CDPBrowserManager
-from var import crawler_type_var, source_keyword_var
+from app.services.crawler.core.var import crawler_type_var, source_keyword_var
 
 from .client import XiaoHongShuClient
 from .exception import DataFetchError, NoteNotFoundError

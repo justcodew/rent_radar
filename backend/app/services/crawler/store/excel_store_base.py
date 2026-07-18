@@ -46,7 +46,7 @@ except ImportError:
 
 from app.services.crawler.core.base.base_crawler import AbstractStore
 from app.services.crawler.core.tools import utils
-import config
+from app.services.crawler.config import base_config as config
 
 
 class ExcelStoreBase(AbstractStore):

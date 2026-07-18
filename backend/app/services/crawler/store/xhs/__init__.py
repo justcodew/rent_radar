@@ -24,7 +24,7 @@
 from typing import List
 
 from app.services.crawler.config import base_config as config
-from var import source_keyword_var
+from app.services.crawler.core.var import source_keyword_var
 from app.services.crawler.core.tools.user_hash import anonymize_user_id, mask_nickname
 
 from .xhs_store_media import *

@@ -29,13 +29,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.services.crawler.core.base.base_crawler import AbstractStore
-from database.db_session import get_session
-from database.models import XhsNote, XhsNoteComment
+from app.database import get_db as get_session
 
 from app.services.crawler.core.tools.async_file_writer import AsyncFileWriter
 from app.services.crawler.core.tools.time_util import get_current_timestamp
-from var import crawler_type_var
-from database.mongodb_store_base import MongoDBStoreBase
+from app.services.crawler.core.var import crawler_type_var
+
 from app.services.crawler.core.tools import utils
 from app.services.crawler.store.excel_store_base import ExcelStoreBase
 

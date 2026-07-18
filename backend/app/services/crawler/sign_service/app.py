@@ -21,9 +21,9 @@ import logging
 
 from fastapi import FastAPI, HTTPException
 
-from sign_service.models import HealthResponse, SignRequest, SignResponse
+from app.services.crawler.sign_service.models import HealthResponse, SignRequest, SignResponse
 # import 触发各 provider 注册到 registry
-from sign_service.providers import registry
+from app.services.crawler.sign_service.providers import registry
 
 logger = logging.getLogger("sign_service")
 
