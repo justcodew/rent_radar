@@ -106,6 +106,9 @@ async def list_listings(
         )
         item["agent_level"] = agent_result["agent_level"]
         item["is_agent"] = agent_result["is_agent"]
+        # 关键标签(阳台/电梯/朝向/地铁/面积/已租)
+        from app.services.crawler.extractor import extract_tags
+        item["tags"] = extract_tags(f"{listing.title or ''}\n{listing.content or ''}")
         item = _rewrite_images(item)
         data.append(item)
 
@@ -137,5 +140,16 @@ async def get_listing(
         item["general_score"] = score.general_score
         item["risk_tags"] = score.risk_tags or []
         item["evidence"] = score.evidence
+    # 关键标签
+    from app.services.crawler.extractor import extract_tags
+    from app.services.scoring.agent_detector import detect_agent
+    item["tags"] = extract_tags(f"{listing.title or ''}\n{listing.content or ''}")
+    agent_result = detect_agent(
+        poster_name=listing.poster_name or "",
+        title=listing.title or "",
+        content=listing.content or "",
+    )
+    item["agent_level"] = agent_result["agent_level"]
+    item["is_agent"] = agent_result["is_agent"]
     item = _rewrite_images(item)
     return ok(item)

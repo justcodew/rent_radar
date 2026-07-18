@@ -181,10 +181,7 @@ def extract_contact(text: str) -> dict:
 
 
 def extract_listing_fields(raw_text: str, title: str = "") -> dict[str, Any]:
-    """从帖子原文提取全部结构化字段。
-
-    与 house_pro 的 extract_listing_fields 保持一致,额外支持 k 计价。
-    """
+    """从帖子原文提取全部结构化字段。"""
     text = f"{title}\n{raw_text}"
     return {
         "price": extract_price(text),
@@ -194,7 +191,105 @@ def extract_listing_fields(raw_text: str, title: str = "") -> dict[str, Any]:
         "floor_info": extract_floor(text),
         "orientation": extract_orientation(text),
         "contact_info": extract_contact(text),
+        "tags": extract_tags(text),
     }
+
+
+# ===== 关键标签提取 =====
+
+# 广州地铁站(用于标签提取)
+GUANGZHOU_METRO_STATIONS = [
+    "公园前", "农讲所", "烈士陵园", "东山口", "杨箕", "五羊邨", "珠江新城",
+    "体育西路", "体育中心", "岗顶", "石牌桥", "天河客运站", "广州东站",
+    "越秀公园", "纪念堂", "西门口", "海珠广场", "北京路", "团一大广场",
+    "淘金", "小北", "白云文化广场", "白云公园", "萧岗", "江夏",
+    "陈家祠", "长寿路", "黄沙", "芳村", "花地湾", "滘口",
+    "客村", "鹭江", "中大", "晓港", "江南西", "市二宫",
+    "三元里", "飞翔公园", "白云大道北", "永泰", "同和", "京溪南方医院",
+    "车陂南", "车陂", "东圃", "黄村", "珠村", "三溪",
+    "琶洲", "万胜围", "官洲", "大学城北", "大学城南",
+    "天河智慧城", "神舟路", "科学城", "苏元", "萝岗",
+    "汉溪长隆", "市桥", "番禺广场", "大石", "厦滘", "沥滘",
+    "嘉禾望岗", "白云东平", "燕塘", "天河公园", "棠东",
+    "流花", "彩虹桥", "华林寺", "同福西", "一德路",
+]
+
+# 已租出关键词
+RENTED_KEYWORDS = [
+    "已租", "已出", "已找到", "已成交", "租出去了", "已出租",
+    "已定", "定出去了", "已签约", "合同已签", "找到租客",
+    "已没", "已空", "rented", "已结束", "更新：已租",
+    "已议定", "租掉了", "租出去了", "不再更新",
+]
+
+# 阳台关键词
+BALCONY_KEYWORDS = ["阳台", "露台", "大阳台", "南向阳台"]
+
+# 电梯/步梯关键词
+ELEVATOR_KEYWORDS = ["电梯", "有电梯", "带电梯", "电梯房", "电梯楼", "有电梯的"]
+STAIRS_KEYWORDS = ["步梯", "楼梯", "楼梯房", "无电梯", "没电梯", "不带电梯", "步行梯"]
+
+
+def extract_tags(text: str) -> dict[str, Any]:
+    """提取关键标签:阳台/电梯步梯/朝向/地铁站/面积/已租出"""
+    tags: dict[str, Any] = {}
+
+    # 1. 阳台
+    has_balcony = any(kw in text for kw in BALCONY_KEYWORDS)
+    tags["has_balcony"] = has_balcony
+    if has_balcony:
+        tags["balcony"] = "有阳台"
+
+    # 2. 电梯/步梯
+    has_elevator = any(kw in text for kw in ELEVATOR_KEYWORDS)
+    has_stairs = any(kw in text for kw in STAIRS_KEYWORDS)
+    if has_elevator and not has_stairs:
+        tags["elevator"] = "电梯"
+    elif has_stairs and not has_elevator:
+        tags["elevator"] = "步梯"
+    elif has_stairs and has_elevator:
+        # 同时提到(如"步梯5楼,电梯已安装")
+        tags["elevator"] = "电梯(加装)"
+    # 楼层信息里也能判断
+    if "elevator" not in tags:
+        floor = extract_floor(text)
+        if floor:
+            if "电梯" in floor or "电梯" in text:
+                tags["elevator"] = "电梯"
+            else:
+                tags["elevator"] = "步梯"
+
+    # 3. 朝向(复用已有函数)
+    orientation = extract_orientation(text)
+    if orientation:
+        tags["orientation"] = orientation
+
+    # 4. 地铁站
+    metro_hits = [s for s in GUANGZHOU_METRO_STATIONS if s in text]
+    if metro_hits:
+        tags["metro_stations"] = metro_hits[:3]  # 最多3个
+    # 也匹配 🚇 + 地名模式
+    import re
+    metro_emoji = re.findall(r"🚇\s*(\S{2,6})", text)
+    for m in metro_emoji:
+        clean = m.strip("🚇📍✨🍃💰🏠")
+        if clean and clean not in metro_hits and len(clean) >= 2:
+            tags.setdefault("metro_stations", []).append(clean)
+            if len(tags.get("metro_stations", [])) > 3:
+                tags["metro_stations"] = tags["metro_stations"][:3]
+
+    # 5. 面积(复用已有函数)
+    size = extract_area_size(text)
+    if size:
+        tags["size_sqm"] = size
+
+    # 6. 已租出
+    is_rented = any(kw in text for kw in RENTED_KEYWORDS)
+    tags["is_rented"] = is_rented
+    if is_rented:
+        tags["rented"] = "已租出"
+
+    return tags
 
 
 def is_probably_agent(content: str, title: str = "") -> bool:

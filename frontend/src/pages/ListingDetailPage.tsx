@@ -105,21 +105,45 @@ export default function ListingDetailPage() {
                   <span className="text-base text-gray-400 font-normal"> /月</span>
                 </span>
               )}
-              <div className="flex flex-wrap gap-2 text-sm text-gray-600">
-                {listing.layout && (
-                  <span className="px-2 py-0.5 bg-gray-100 rounded">{listing.layout}</span>
-                )}
-                {listing.size_sqm != null && (
-                  <span className="px-2 py-0.5 bg-gray-100 rounded">{listing.size_sqm}㎡</span>
-                )}
-                {listing.orientation && (
-                  <span className="px-2 py-0.5 bg-gray-100 rounded">{listing.orientation}</span>
-                )}
-                {listing.floor_info && (
-                  <span className="px-2 py-0.5 bg-gray-100 rounded">{listing.floor_info}</span>
-                )}
-              </div>
+              {(listing as any).tags?.is_rented && (
+                <span className="px-3 py-1 rounded-lg bg-gray-800 text-white text-sm font-medium">
+                  已租出
+                </span>
+              )}
             </div>
+
+            {/* 关键标签 */}
+            {(listing as any).tags && Object.keys((listing as any).tags).length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {listing.layout && (
+                  <span className="px-2 py-0.5 bg-gray-100 rounded text-sm">{listing.layout}</span>
+                )}
+                {(listing.size_sqm != null || (listing as any).tags.size_sqm) && (
+                  <span className="px-2 py-0.5 bg-gray-100 rounded text-sm">
+                    {(listing as any).tags.size_sqm || listing.size_sqm}㎡
+                  </span>
+                )}
+                {(listing as any).tags.has_balcony && (
+                  <span className="px-2 py-0.5 bg-green-50 text-green-700 rounded text-sm">🌿 有阳台</span>
+                )}
+                {(listing as any).tags.elevator && (
+                  <span className={`px-2 py-0.5 rounded text-sm ${
+                    (listing as any).tags.elevator.startsWith("电梯")
+                      ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                  }`}>
+                    {(listing as any).tags.elevator.startsWith("电梯") ? "🛗" : "🚶"} {(listing as any).tags.elevator}
+                  </span>
+                )}
+                {(listing as any).tags.orientation && (
+                  <span className="px-2 py-0.5 bg-purple-50 text-purple-700 rounded text-sm">
+                    🧭 {(listing as any).tags.orientation}
+                  </span>
+                )}
+                {(listing as any).tags.metro_stations?.map((s: string, i: number) => (
+                  <span key={i} className="px-2 py-0.5 bg-cyan-50 text-cyan-700 rounded text-sm">🚇 {s}</span>
+                ))}
+              </div>
+            )}
 
             {listing.risk_tags && listing.risk_tags.length > 0 && (
               <div className="mb-3 flex flex-wrap gap-1">
