@@ -1,19 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 
 export default function CasePage() {
   const [caseData, setCaseData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    fetch("/api/v1/cases/yuexiu-4k-elevator-balcony")
+  const loadCase = useCallback((refresh = false) => {
+    if (refresh) setRefreshing(true); else setLoading(true);
+    const url = `/api/v1/cases/yuexiu-4k-elevator-balcony${refresh ? "?refresh=true" : ""}`;
+    fetch(url)
       .then((r) => r.json())
       .then((d) => {
         setCaseData(d.data || d);
         setLoading(false);
+        setRefreshing(false);
       })
-      .catch(() => setLoading(false));
+      .catch(() => { setLoading(false); setRefreshing(false); });
   }, []);
+
+  useEffect(() => { loadCase(); }, [loadCase]);
 
   if (loading) return <div className="text-center py-12 text-gray-400">加载中...</div>;
   if (!caseData) return <div className="text-center py-12 text-gray-400">案例不存在</div>;
@@ -22,11 +28,25 @@ export default function CasePage() {
     <div className="max-w-4xl mx-auto space-y-6">
       {/* 标题区 */}
       <div className="rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 p-6 text-white shadow-lg">
-        <div className="text-xs opacity-80 mb-1">📋 需求案例</div>
-        <h1 className="text-2xl font-bold leading-tight">{caseData.title}</h1>
-        <p className="mt-2 text-sm opacity-90">{caseData.subtitle}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-xs opacity-80 mb-1">📋 需求案例</div>
+            <h1 className="text-2xl font-bold leading-tight">{caseData.title}</h1>
+            <p className="mt-2 text-sm opacity-90">{caseData.subtitle}</p>
+          </div>
+          <button
+            onClick={() => loadCase(true)}
+            disabled={refreshing}
+            className="flex-shrink-0 bg-white/20 hover:bg-white/30 text-white text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap"
+          >
+            {refreshing ? "🔄 刷新中..." : "🔄 刷新数据"}
+          </button>
+        </div>
         <div className="mt-3 flex items-center gap-2 text-xs bg-white/20 rounded-lg px-3 py-1.5 inline-block">
           👤 {caseData.persona}
+          {caseData.refreshed && (
+            <span className="ml-2 text-green-300">✓ 已更新</span>
+          )}
         </div>
       </div>
 
