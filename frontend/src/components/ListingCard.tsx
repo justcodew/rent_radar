@@ -64,22 +64,41 @@ export default function ListingCard({ listing, matchScore }: Props) {
 
         {/* 关键标签 */}
         <div className="mt-2 flex flex-wrap gap-1">
-          {tags.has_balcony && (
-            <span className="px-1.5 py-0.5 rounded text-xs bg-green-50 text-green-700">🌿 阳台</span>
-          )}
-          {tags.elevator && (
-            <span className={`px-1.5 py-0.5 rounded text-xs ${
-              tags.elevator === "电梯" || tags.elevator === "电梯(加装)"
-                ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
-            }`}>
-              {tags.elevator === "电梯" ? "🛗 电梯" : tags.elevator === "电梯(加装)" ? "🛗 电梯(加装)" : "🚶 步梯"}
-            </span>
-          )}
-          {tags.orientation && (
-            <span className="px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-700">🧭 {tags.orientation}</span>
+          {/* 房型(紧跟面积后) */}
+          {tags.layout && !listing.layout && (
+            <span className="px-1.5 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700">🏠 {tags.layout}</span>
           )}
           {tags.size_sqm && !listing.size_sqm && (
             <span className="px-1.5 py-0.5 rounded text-xs bg-gray-50 text-gray-600">📐 {tags.size_sqm}㎡</span>
+          )}
+          {/* 具体楼层 */}
+          {tags.floor_note && (
+            <span className={`px-1.5 py-0.5 rounded text-xs ${
+              tags.floor_note.includes("超高层") ? "bg-red-50 text-red-600 font-medium" :
+              tags.floor_note.includes("高层") && tags.floor_note.includes("步梯") ? "bg-orange-50 text-orange-600" :
+              tags.floor_note.includes("步梯") ? "bg-amber-50 text-amber-700" :
+              "bg-gray-100 text-gray-600"
+            }`}>
+              {tags.floor_note.includes("步梯") ? "🚶" : "🏢"} {tags.floor_note}
+            </span>
+          )}
+          {/* 电梯类型 */}
+          {tags.elevator && (
+            <span className={`px-1.5 py-0.5 rounded text-xs ${
+              tags.elevator.includes("加装")
+                ? "bg-amber-50 text-amber-700"
+                : tags.elevator.includes("步梯")
+                ? "bg-gray-100 text-gray-500"
+                : "bg-blue-50 text-blue-700"
+            }`}>
+              {tags.elevator.includes("加装") ? "🔧" : tags.elevator.includes("步梯") ? "" : "🛗"} {tags.elevator}
+            </span>
+          )}
+          {tags.has_balcony && (
+            <span className="px-1.5 py-0.5 rounded text-xs bg-green-50 text-green-700">🌿 阳台</span>
+          )}
+          {tags.orientation && (
+            <span className="px-1.5 py-0.5 rounded text-xs bg-purple-50 text-purple-700">🧭 {tags.orientation}</span>
           )}
           {tags.metro_stations && tags.metro_stations.length > 0 && (
             <span className="px-1.5 py-0.5 rounded text-xs bg-cyan-50 text-cyan-700">

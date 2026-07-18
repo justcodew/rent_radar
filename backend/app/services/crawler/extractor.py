@@ -122,7 +122,8 @@ def extract_area_size(text: str) -> int | None:
 
 
 def extract_layout(text: str) -> str | None:
-    """提取户型(如 2室1厅)"""
+    """提取户型(如 两房一厅 / 2室1厅 / 单间)"""
+    # 先用已有 patterns
     for p in LAYOUT_PATTERNS:
         m = re.search(p, text)
         if m:
@@ -132,6 +133,28 @@ def extract_layout(text: str) -> str | None:
                 normalized = normalized.replace(cn, num)
             normalized = normalized.replace("居", "室")
             return normalized
+
+    # 补充中文写法:两房一厅 / 三房两厅 / 一房一厅 / 两房 / 单间
+    cn_patterns = [
+        (r"两房\s*(一厅|1厅)", "两房一厅"),
+        (r"三房\s*(一厅|两厅|2厅)", "三房一厅"),
+        (r"一房\s*(一厅|1厅)", "一房一厅"),
+        (r"四房\s*(一厅|两厅)", "四房一厅"),
+        (r"两房两厅", "两房两厅"),
+        (r"两房一卫", "两房"),
+        (r"三房一卫", "三房"),
+        (r"(两房|2房)(?![一两三四一二三四厅])", "两房"),
+        (r"(三房|3房)(?![一两三四厅])", "三房"),
+        (r"(一房|1房)(?![一两三四厅])", "一房"),
+        (r"单间", "单间"),
+        (r"开间", "开间"),
+        (r"一居室", "一房"),
+        (r"两居室", "两房"),
+        (r"三居室", "三房"),
+    ]
+    for pattern, display in cn_patterns:
+        if re.search(pattern, text):
+            return display
     return None
 
 
@@ -300,8 +323,21 @@ def _detect_elevator_type(text: str, has_stairs: bool) -> str | None:
 
 
 def extract_tags(text: str) -> dict[str, Any]:
-    """提取关键标签:阳台/电梯步梯(含楼层)/朝向/地铁站/面积/已租出"""
+    """提取关键标签:房型/阳台/电梯步梯(含具体楼层)/朝向/地铁站/面积/已租出"""
     tags: dict[str, Any] = {}
+
+    # 0. 房型(放在最前面,面积后面)
+    layout = extract_layout(text)
+    if layout:
+        # 标准化显示:1室1厅 → 一房一厅
+        layout_display = layout
+        num_map = {"1": "一", "2": "两", "3": "三", "4": "四"}
+        room_num = layout[0] if layout[0].isdigit() else ""
+        if room_num and room_num in num_map:
+            # 1室1厅 → 一房一厅
+            parts = layout.replace("室", "房").replace("厅", "厅")
+            layout_display = num_map.get(parts[0], parts[0]) + parts[1:]
+        tags["layout"] = layout_display
 
     # 1. 阳台
     has_balcony = any(kw in text for kw in BALCONY_KEYWORDS)
@@ -309,37 +345,33 @@ def extract_tags(text: str) -> dict[str, Any]:
     if has_balcony:
         tags["balcony"] = "有阳台"
 
-    # 2. 电梯/步梯类型 + 楼层
+    # 2. 电梯/步梯类型 + 具体楼层
     has_stairs = any(kw in text for kw in STAIRS_KEYWORDS)
     elevator_type = _detect_elevator_type(text, has_stairs)
     if elevator_type:
         tags["elevator"] = elevator_type
 
-    # 楼层详情
+    # 楼层详情:始终显示具体楼层数字
     floor_desc, floor_num = _extract_floor_level(text)
     if floor_desc:
         tags["floor_desc"] = floor_desc
     if floor_num:
         tags["floor_num"] = floor_num
-        # 楼层评级(步梯影响大,电梯影响小)
         is_stairs = "步梯" in (elevator_type or "") or has_stairs
         if is_stairs:
             if floor_num <= 3:
-                tags["floor_note"] = f"步梯{floor_num}楼(低层,可接受)"
+                tags["floor_note"] = f"步梯{floor_num}楼·低层"
             elif floor_num <= 5:
-                tags["floor_note"] = f"步梯{floor_num}楼(中层,略累)"
+                tags["floor_note"] = f"步梯{floor_num}楼·中层"
             elif floor_num <= 7:
-                tags["floor_note"] = f"步梯{floor_num}楼(高层,较累)"
+                tags["floor_note"] = f"步梯{floor_num}楼·高层"
             else:
-                tags["floor_note"] = f"步梯{floor_num}楼(超高层,慎重!)"
+                tags["floor_note"] = f"步梯{floor_num}楼·超高层⚠️"
         else:
-            # 有电梯的楼层不太敏感,但仍提示
-            if floor_num <= 3:
-                tags["floor_note"] = f"{floor_num}楼(低层)"
-            elif floor_num >= 8:
-                tags["floor_note"] = f"{floor_num}楼(高层,视野好)"
-            else:
-                tags["floor_note"] = f"{floor_num}楼(中层)"
+            tags["floor_note"] = f"{floor_num}楼"
+    elif floor_desc:
+        # 有描述但没提取到数字(如"低楼层"/"中楼层")
+        tags["floor_note"] = floor_desc
 
     # 3. 朝向(复用已有函数)
     orientation = extract_orientation(text)
