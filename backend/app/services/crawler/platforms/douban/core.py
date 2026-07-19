@@ -129,6 +129,7 @@ class DoubanCrawler(AbstractCrawler):
                                 note.creator_hash = detail.creator_hash
                                 note.user_nickname = detail.user_nickname
                                 note.create_date_time = detail.create_date_time or note.create_date_time
+                                note.image_urls = detail.image_urls or []
                             await store.update_douban_note(note)
                             topic_ids.append(note.topic_id)
 
@@ -215,6 +216,7 @@ class DoubanCrawler(AbstractCrawler):
                             detail = await self.douban_client.get_topic_detail(note.topic_id)
                             if detail:
                                 note.desc = detail.desc or note.desc
+                                note.image_urls = detail.image_urls or []
                                 await store.update_douban_note(note)
                                 if config.ENABLE_GET_COMMENTS:
                                     await self.douban_client.get_all_topic_comments(

@@ -79,7 +79,7 @@ class DoubanClient(AbstractApiClient, ProxyRefreshMixin):
 
         GET /group/search?cat=1013&q=<关键词>&start=<偏移>
         """
-        from constant.douban import GROUP_SEARCH_CAT
+        from app.services.crawler.constant.douban import GROUP_SEARCH_CAT
         params = {"cat": GROUP_SEARCH_CAT, "q": keyword, "start": start}
         url = f"{self._group_host}/search?{urlencode(params)}"
         utils.logger.info(f"[DoubanClient.search] {url}")
@@ -112,7 +112,7 @@ class DoubanClient(AbstractApiClient, ProxyRefreshMixin):
         max_count: int = 50,
     ) -> List:
         """获取帖子的所有回复(按页翻)。"""
-        from constant.douban import GROUP_PAGE_SIZE
+        from app.services.crawler.constant.douban import GROUP_PAGE_SIZE
         results: List = []
         start = 0
         # 豆瓣回复数 / 每页条数 = 页数,但回复可能不完整,用 max_count 兜底

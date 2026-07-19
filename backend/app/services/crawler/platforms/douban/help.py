@@ -149,6 +149,34 @@ class DoubanExtractor:
         ).getall()
         note.desc = self._normalize_text(" ".join(content_parts))
 
+        # 正文图片:只在 div.topic-content 内查找(避免抓到作者头像、评论头像、表情等)
+        # 兼容懒加载:优先 src,缺失则取 data-src
+        image_urls: list[str] = []
+        seen = set()
+        img_nodes = sel.xpath(
+            "//div[contains(@class,'topic-content')]//div[contains(@class,'topic-content')]//img"
+            " | //div[@id='link-report']//div[contains(@class,'topic-content')]//img"
+        )
+        for img_node in img_nodes:
+            src = (img_node.xpath("@src").get(default="") or "").strip()
+            if not src or src.startswith("data:"):
+                src = (img_node.xpath("@data-src").get(default="") or "").strip()
+            if not src or src.startswith("data:"):
+                continue
+            # 相对路径补全
+            if src.startswith("//"):
+                src = "https:" + src
+            elif src.startswith("/"):
+                src = DOUBAN_URL.rstrip("/") + src
+            # 严格过滤:只保留帖子正文图(/view/group_topic/ 或 /view/photo/)
+            # 排除 /icon/(头像)、/umoji/(表情)、统计像素等
+            if "/view/group_topic/" not in src and "/view/photo/" not in src:
+                continue
+            if src not in seen:
+                seen.add(src)
+                image_urls.append(src)
+        note.image_urls = image_urls
+
         # 作者
         author_nick = self._normalize_text(
             sel.xpath("//h3//span[@class='author']//text()").get(default="")

@@ -82,8 +82,11 @@ async def _run_crawl_task(
             login_type=login_type,
             cookies=cookies,
         )
-        _tasks[task_id]["status"] = result.get("status", "success")
+        status = result.get("status", "success")
+        _tasks[task_id]["status"] = status
         _tasks[task_id]["result"] = result
+        if status in ("failed", "error"):
+            _tasks[task_id]["error"] = result.get("message") or str(result)
     except Exception as e:
         _tasks[task_id]["status"] = "failed"
         _tasks[task_id]["error"] = str(e)
@@ -145,9 +148,21 @@ async def ingest_to_db(
             continue
 
         exists = await db.execute(
-            select(Listing.id).where(Listing.source == source, Listing.source_id == source_id)
+            select(Listing.id, Listing.image_urls).where(
+                Listing.source == source, Listing.source_id == source_id
+            )
         )
-        if exists.scalar_one_or_none():
+        row = exists.first()
+        if row:
+            # 已存在,但如果 DB 里没图片而新数据有,补一下 image_urls(回填用)
+            listing_id, db_images = row
+            new_images = item.get("image_urls") or []
+            if new_images and not db_images:
+                await db.execute(
+                    Listing.__table__.update()
+                    .where(Listing.id == listing_id)
+                    .values(image_urls=new_images)
+                )
             stats["skipped"] += 1
             continue
 
@@ -163,6 +178,7 @@ async def ingest_to_db(
             layout=item.get("layout"),
             area_name=item.get("area_name"),
             size_sqm=item.get("size_sqm"),
+            image_urls=item.get("image_urls") or [],
             contact_info=item.get("contact_info", {}),
             raw_data=item.get("raw_data", {}),
         ))

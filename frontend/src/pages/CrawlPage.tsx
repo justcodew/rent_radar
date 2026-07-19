@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { crawlApi } from "../services/api";
 
 export default function CrawlPage() {
@@ -31,23 +31,36 @@ export default function CrawlPage() {
 
   const pollStatus = (taskId: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
+    let elapsed = 0;
+    const TIMEOUT_MS = 5 * 60 * 1000; // 5 分钟兜底超时
     pollRef.current = window.setInterval(async () => {
+      elapsed += 3000;
       try {
         const status: any = await crawlApi.status(taskId);
         setTaskStatus(status);
-        if (status.status === "success" || status.status === "failed") {
+        const done = ["success", "failed", "not_found"].includes(status.status);
+        if (done || elapsed >= TIMEOUT_MS) {
           if (pollRef.current) clearInterval(pollRef.current);
           setLoading(false);
-          // 采集成功后自动加载数据
-          if (status.status === "success") {
+          if (status.status === "not_found") {
+            setTaskStatus({ ...status, error: "任务不存在(后端可能已重启)" });
+          } else if (elapsed >= TIMEOUT_MS && !done) {
+            setTaskStatus({ status: "failed", error: "采集超时(>5min)" });
+          } else if (status.status === "success") {
             fetchListings();
           }
         }
       } catch {
-        // 忽略轮询错误
+        // 忽略轮询错误,等下一轮
       }
-    }, 3000); // 每 3 秒查一次
+    }, 3000);
   };
+
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
 
   const fetchListings = async () => {
     try {

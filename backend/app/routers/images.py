@@ -58,11 +58,21 @@ async def proxy_image(url: str):
         raise HTTPException(status_code=400, detail="Invalid URL")
 
     try:
+        # 按图片域名匹配 Referer(豆瓣图床需要 douban Referer,否则可能 403)
+        from urllib.parse import urlparse
+        host = urlparse(url).netloc.lower()
+        if "doubanio" in host or "douban" in host:
+            referer = "https://www.douban.com/"
+        elif "xiaohongshu" in host or "xhscdn" in host or "xhslio" in host:
+            referer = "https://www.xiaohongshu.com/"
+        else:
+            referer = f"https://{host}/" if host else "https://www.douban.com/"
+
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(
                 url,
                 headers={
-                    "Referer": "https://www.xiaohongshu.com",
+                    "Referer": referer,
                     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
                 },
             )

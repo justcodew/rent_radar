@@ -8,6 +8,7 @@ export default function ListingListPage() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [jumpInput, setJumpInput] = useState("");
   const pageSize = 24;
 
   const load = (p: number) => {
@@ -41,7 +42,7 @@ export default function ListingListPage() {
             ))}
           </div>
           {totalPages > 1 && (
-            <div className="flex justify-center gap-2 mt-8">
+            <div className="flex justify-center items-center gap-2 mt-8">
               <button
                 onClick={() => load(page - 1)}
                 disabled={page <= 1}
@@ -58,6 +59,33 @@ export default function ListingListPage() {
                 className="btn-secondary"
               >
                 下一页
+              </button>
+              <span className="mx-2 text-sm text-gray-500">| 跳到</span>
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={jumpInput}
+                onChange={(e) => setJumpInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const p = parseInt(jumpInput, 10);
+                    if (!isNaN(p) && p >= 1 && p <= totalPages) load(p);
+                  }
+                }}
+                className="w-16 border rounded px-2 py-1 text-sm text-center"
+                placeholder={String(page)}
+              />
+              <span className="text-sm text-gray-500">页</span>
+              <button
+                onClick={() => {
+                  const p = parseInt(jumpInput, 10);
+                  if (!isNaN(p) && p >= 1 && p <= totalPages) load(p);
+                }}
+                disabled={!jumpInput || parseInt(jumpInput, 10) === page}
+                className="btn-secondary text-sm"
+              >
+                Go
               </button>
             </div>
           )}

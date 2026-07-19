@@ -52,10 +52,10 @@ async def run_crawl(
         elif platform == "wb":
             return await _crawl_weibo(keywords, max_count, login_type, cookies)
         else:
-            return {"platform": platform, "status": "error", "message": f"不支持的平台: {platform}"}
+            raise ValueError(f"不支持的平台: {platform}")
     except Exception as e:
         logger.error("crawl failed", platform=platform, error=str(e))
-        return {"platform": platform, "status": "failed", "message": str(e)}
+        raise
 
 
 async def _crawl_xhs(keywords: str, max_count: int, login_type: str, cookies: str) -> dict:
@@ -155,18 +155,23 @@ async def get_crawled_listings(platform: str, limit: int = 100) -> list[dict]:
     if not platform_dir.exists():
         return []
 
-    notes = []
+    # 按 note_id 去重,保留最后一条(最新采集的数据,可能补了图片等字段)
+    notes_by_id: dict[str, dict] = {}
     for fpath in sorted(platform_dir.glob("*contents*.jsonl")):
         with open(fpath, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
-                if line:
-                    try:
-                        notes.append(json.loads(line))
-                    except json.JSONDecodeError:
-                        continue
-        if len(notes) >= limit:
-            break
+                if not line:
+                    continue
+                try:
+                    note = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                nid = note.get("note_id") or note.get("topic_id") or note.get("mblog_id") or ""
+                if not nid:
+                    continue
+                notes_by_id[str(nid)] = note  # 后写入覆盖前一条
+    notes = list(notes_by_id.values())
 
     source_map = {"xhs": "xiaohongshu", "douban": "douban", "wb": "weibo"}
     source = source_map.get(platform, platform)
@@ -194,6 +199,11 @@ async def get_crawled_listings(platform: str, limit: int = 100) -> list[dict]:
             "floor_info": fields["floor_info"],
             "orientation": fields["orientation"],
             "contact_info": fields["contact_info"],
+            "image_urls": (
+                note.get("image_urls")
+                if isinstance(note.get("image_urls"), list)
+                else [u.strip() for u in str(note.get("image_urls", "")).split(",") if u.strip()]
+            ),
             "raw_data": {**note, "fields_pre_extracted": True},
         })
 

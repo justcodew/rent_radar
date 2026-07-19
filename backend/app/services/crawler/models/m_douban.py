@@ -24,6 +24,7 @@ class DoubanNote:
     create_date_time: str = ""
     note_url: str = ""
     source_keyword: str = ""
+    image_urls: list = None  # 帖子正文图片 URL 列表
 
 
 class DoubanComment:

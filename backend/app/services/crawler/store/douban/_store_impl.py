@@ -15,6 +15,7 @@ from app.services.crawler.core.var import crawler_type_var
 
 def _note_to_dict(note) -> Dict:
     """DoubanNote 对象 → 存储 dict"""
+    image_urls = getattr(note, "image_urls", None) or []
     return {
         "topic_id": getattr(note, "topic_id", ""),
         "title": getattr(note, "title", ""),
@@ -28,6 +29,7 @@ def _note_to_dict(note) -> Dict:
         "create_date_time": getattr(note, "create_date_time", ""),
         "note_url": getattr(note, "note_url", ""),
         "source_keyword": getattr(note, "source_keyword", ""),
+        "image_urls": ",".join(image_urls) if isinstance(image_urls, list) else "",
         "last_modify_ts": int(time.time()),
     }
 
