@@ -27,22 +27,28 @@ _OVERPASS_URLS = [
     "https://overpass.openstreetmap.fr/api/interpreter",
 ]
 _USER_AGENT = "rent-radar/1.0 (educational project)"
-_TIMEOUT = 30.0
+_TIMEOUT = 60.0
 
 # 5 分钟内存缓存:(lat, lng, radius_m) -> (timestamp, result)
 _cache: dict[tuple[float, float, int], tuple[float, list[dict]]] = {}
 _CACHE_TTL = 300  # 5 min
 
 # Overpass QL:查指定中心点 R 米内的住宅小区
-# 只用最常用的两个标签(landuse=residential 和 place=neighbourhood),
-# 避免 union 查询太重导致服务器超时
+# 标签组合说明(从窄到宽):
+# - landuse=residential:成片住宅用地,通常是小区
+# - place=neighbourhood|quarter|suburb:邻里/街区/分区,有 name 的居住片区
+# - building=residential|apartments|dormitory|terrace:带 name 的住宅楼/大楼
+#   (中国老城区大量单体住宅楼只有 building 标签,但带 name,是关键补充)
+# 都要求有 name,过滤掉匿名建筑
 _QUERY_TEMPLATE = """
-[out:json][timeout:20];
+[out:json][timeout:35];
 (
   way["landuse"="residential"]["name"](around:{radius},{lat},{lng});
-  node["place"="neighbourhood"](around:{radius},{lat},{lng});
+  way["building"~"residential|apartments|dormitory|terrace"]["name"](around:{radius},{lat},{lng});
+  node["building"~"residential|apartments|dormitory"]["name"](around:{radius},{lat},{lng});
+  node["place"~"neighbourhood|quarter|suburb"](around:{radius},{lat},{lng});
 );
-out center 200;
+out center 400;
 """
 
 
