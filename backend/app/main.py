@@ -13,6 +13,7 @@ from app.routers import auth, profiles, listings, scores, search, recommend, fav
 from app.routers import images as images_router
 from app.routers import prompts as prompts_router
 from app.routers import cases as cases_router
+from app.routers import subway as subway_router
 
 setup_logging()
 logger = get_logger(__name__)
@@ -103,3 +104,4 @@ app.include_router(crawl.router)
 app.include_router(images_router.router)
 app.include_router(prompts_router.router)
 app.include_router(cases_router.router)
+app.include_router(subway_router.router)

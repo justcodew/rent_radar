@@ -3,6 +3,7 @@ import type {
   Listing, Paginated, Profile, ScoreDetail, TokenOut, User,
   InsightsResult, NeedMatchResult,
 } from "../types";
+import type { SubwayExploreResult, SubwayStation } from "../types/subway";
 
 // ===== Auth =====
 export const authApi = {
@@ -117,4 +118,12 @@ export const promptApi = {
   updateCommunity: (data: { system?: string; user_template?: string }) =>
     http.put<unknown, any>("/prompts/community", data),
   resetCommunity: () => http.post<unknown, any>("/prompts/community/reset"),
+};
+
+// ===== Subway(地铁找房) =====
+export const subwayApi = {
+  stations: (q: string) =>
+    http.get<unknown, { stations: SubwayStation[]; total: number }>("/subway/stations", { params: { q, limit: 10 } }),
+  explore: (station: string, radius_km: number) =>
+    http.get<unknown, SubwayExploreResult>("/subway/explore", { params: { station, radius_km } }),
 };
